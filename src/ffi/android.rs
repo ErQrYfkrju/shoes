@@ -1,23 +1,19 @@
-//! Android JNI bindings for shoes TUN service.
+//! JNI bindings for ByeByeDPI Android app.
 //!
-//! This module provides JNI-compatible functions for Android integration.
+//! Package: `io.github.cfal.shoes`
+//! Class: `ShoesNative`
 //!
-//! # JNI Function Naming
-//!
-//! JNI function names follow the pattern:
-//! `Java_<package>_<class>_<method>`
-//!
-//! For example, if your Kotlin class is:
+//! # Kotlin interface
 //! ```kotlin
-//! package com.shoesproxy
-//!
 //! class ShoesNative {
-//!     external fun init(logLevel: String): Int
+//!     companion object { init { System.loadLibrary("shoes") } }
+//!
+//!     private external fun jniInit(logLevel: String): Int
+//!     private external fun jniStart(configYaml: String, protectCallback: Any?): Long
+//!     private external fun jniStop(handle: Long)
+//!     private external fun jniIsRunning(): Boolean
 //! }
 //! ```
-//!
-//! The JNI function would be:
-//! `Java_com_shoesproxy_ShoesNative_init`
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -34,10 +30,10 @@ use crate::tun::{FnSocketProtector, set_global_socket_protector};
 
 use super::common::{
     self, LOG_FILE, LOGGER_INITIALIZED, TUN_SERVICE, TunServiceHandle, setup_log_file,
+    start_proxy_from_config,
 };
 
-/// Writes to Android logcat. Uses the `record` arg for level mapping;
-/// logcat has its own formatting so the pre-formatted string is ignored.
+/// Пишет в Android logcat.
 struct LogcatWriter;
 
 impl LogWriter for LogcatWriter {
@@ -48,14 +44,18 @@ impl LogWriter for LogcatWriter {
             let tag = CString::new("shoes").unwrap_or_default();
             let msg = CString::new(format!("{}", record.args())).unwrap_or_default();
             let priority = match record.level() {
-                log::Level::Error => 6, // ANDROID_LOG_ERROR
-                log::Level::Warn => 5,  // ANDROID_LOG_WARN
-                log::Level::Info => 4,  // ANDROID_LOG_INFO
-                log::Level::Debug => 3, // ANDROID_LOG_DEBUG
-                log::Level::Trace => 2, // ANDROID_LOG_VERBOSE
+                log::Level::Error => 6,
+                log::Level::Warn  => 5,
+                log::Level::Info  => 4,
+                log::Level::Debug => 3,
+                log::Level::Trace => 2,
             };
             unsafe {
-                ndk_sys::__android_log_write(priority as i32, tag.as_ptr(), msg.as_ptr());
+                ndk_sys::__android_log_write(
+                    priority as i32,
+                    tag.as_ptr(),
+                    msg.as_ptr(),
+                );
             }
         }
         #[cfg(not(target_os = "android"))]
@@ -65,18 +65,12 @@ impl LogWriter for LogcatWriter {
     fn flush(&self) {}
 }
 
-/// Initialize the shoes library.
+/// Инициализирует библиотеку shoes.
 ///
-/// # Arguments
-/// * `env` - JNI environment
-/// * `_class` - Java class (unused)
-/// * `log_level` - Log level string ("error", "warn", "info", "debug", "trace")
-///
-/// # Returns
-/// * 0 on success
-/// * -1 on error
+/// Должна быть вызвана один раз до всех остальных функций.
+/// Возвращает 0 при успехе, -1 при ошибке.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_shoesproxy_ShoesNative_init(
+pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniInit(
     mut env: JNIEnv,
     _class: JClass,
     log_level: JString,
@@ -89,9 +83,9 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_init(
         }
     };
 
-    let level = crate::logging::parse_log_level(&level_str).unwrap_or(log::LevelFilter::Info);
+    let level = crate::logging::parse_log_level(&level_str)
+        .unwrap_or(log::LevelFilter::Info);
 
-    // Initialize logger (only once)
     if !LOGGER_INITIALIZED.swap(true, Ordering::SeqCst) {
         LOG_FILE.get_or_init(|| parking_lot::Mutex::new(None));
 
@@ -103,70 +97,25 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_init(
         crate::logging::init_multi_logger(writers, directives);
     }
 
-    info!("shoes initialized with log level: {}", level_str);
+    info!("shoes (ByeByeDPI) initialized, log level: {}", level_str);
     0
 }
 
-/// Get the shoes library version.
+/// Запускает shoes-сервис.
 ///
-/// # Returns
-/// * Version string from Cargo.toml (e.g., "0.1.0")
+/// * `config_yaml`      — готовый YAML-конфиг (device_fd уже подставлен Kotlin-стороной).
+/// * `protect_callback` — объект с методом `protect(Int): Boolean` (VpnService в VPN-режиме)
+///                        или `null` в Proxy-режиме.
+///
+/// Возвращает хэндл > 0 при успехе, -1 при ошибке.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_shoesproxy_ShoesNative_getVersion<'local>(
-    env: JNIEnv<'local>,
-    _class: JClass<'local>,
-) -> JString<'local> {
-    let version = env!("CARGO_PKG_VERSION");
-    env.new_string(version)
-        .unwrap_or_else(|_| JObject::null().into())
-}
-
-/// Set the log file path for file-based logging.
-///
-/// # Arguments
-/// * `env` - JNI environment
-/// * `_class` - Java class (unused)
-/// * `log_path` - Absolute path to the log file
-///
-/// # Returns
-/// * 0 on success
-/// * -1 on error
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_com_shoesproxy_ShoesNative_setLogFile(
-    mut env: JNIEnv,
-    _class: JClass,
-    log_path: JString,
-) -> jint {
-    let path_str: String = match env.get_string(&log_path) {
-        Ok(s) => s.into(),
-        Err(e) => {
-            error!("Failed to get log path string: {}", e);
-            return -1;
-        }
-    };
-
-    setup_log_file(&path_str)
-}
-
-/// Start the shoes service.
-///
-/// # Arguments
-/// * `env` - JNI environment
-/// * `_class` - Java class (unused)
-/// * `config_yaml` - YAML configuration string (includes TUN config with device_fd and optional Server configs like mixed)
-/// * `protect_callback` - Java object with protect(int fd) method
-///
-/// # Returns
-/// * Handle (> 0) on success
-/// * -1 on error
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_com_shoesproxy_ShoesNative_start<'local>(
+pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniStart<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     config_yaml: JString<'local>,
     protect_callback: JObject<'local>,
 ) -> jlong {
-    info!("Starting shoes service");
+    info!("jniStart: starting shoes service");
 
     let config_str: String = match env.get_string(&config_yaml) {
         Ok(s) => s.into(),
@@ -176,59 +125,68 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_start<'local>(
         }
     };
 
-    let callback_ref = match env.new_global_ref(protect_callback) {
-        Ok(r) => r,
-        Err(e) => {
-            error!("Failed to create global ref for callback: {}", e);
-            return -1;
-        }
-    };
+    // В Proxy-режиме callback == null — защищать сокеты не нужно.
+    let is_vpn_mode = !protect_callback.is_null();
 
-    let jvm = match env.get_java_vm() {
-        Ok(vm) => Arc::new(vm),
-        Err(e) => {
-            error!("Failed to get JavaVM: {}", e);
-            return -1;
-        }
-    };
-
-    // Socket protector calls VpnService.protect() to exempt sockets from VPN routing
-    let callback_ref = Arc::new(callback_ref);
-    let jvm_clone = jvm.clone();
-    let callback_clone = callback_ref.clone();
-
-    let protector = FnSocketProtector::new(move |fd: i32| {
-        let mut env = match jvm_clone.attach_current_thread() {
-            Ok(env) => env,
+    if is_vpn_mode {
+        let callback_ref = match env.new_global_ref(&protect_callback) {
+            Ok(r) => r,
             Err(e) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to attach to JVM: {}", e),
-                ));
+                error!("Failed to create global ref for callback: {}", e);
+                return -1;
             }
         };
 
-        let result = env.call_method(&*callback_clone, "protect", "(I)Z", &[JValue::Int(fd)]);
-
-        match result {
-            Ok(v) => {
-                if v.z().unwrap_or(false) {
-                    Ok(())
-                } else {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "VpnService.protect() returned false",
-                    ))
-                }
+        let jvm = match env.get_java_vm() {
+            Ok(vm) => Arc::new(vm),
+            Err(e) => {
+                error!("Failed to get JavaVM: {}", e);
+                return -1;
             }
-            Err(e) => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to call protect(): {}", e),
-            )),
-        }
-    });
+        };
 
-    set_global_socket_protector(Arc::new(protector));
+        let callback_ref = Arc::new(callback_ref);
+        let jvm_clone = jvm.clone();
+        let callback_clone = callback_ref.clone();
+
+        let protector = FnSocketProtector::new(move |fd: i32| {
+            let mut env = match jvm_clone.attach_current_thread() {
+                Ok(e) => e,
+                Err(e) => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Failed to attach to JVM: {}", e),
+                    ));
+                }
+            };
+
+            let result = env.call_method(
+                &*callback_clone,
+                "protect",
+                "(I)Z",
+                &[JValue::Int(fd)],
+            );
+
+            match result {
+                Ok(v) => {
+                    if v.z().unwrap_or(false) {
+                        Ok(())
+                    } else {
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "VpnService.protect() returned false",
+                        ))
+                    }
+                }
+                Err(e) => Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to call protect(): {}", e),
+                )),
+            }
+        });
+
+        set_global_socket_protector(Arc::new(protector));
+    }
 
     let runtime = match Runtime::new() {
         Ok(rt) => rt,
@@ -245,7 +203,13 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_start<'local>(
     runtime.spawn(async move {
         info!("Shoes service task started");
 
-        match common::start_from_config(&config_str, shutdown_rx).await {
+        let result = if is_vpn_mode {
+            common::start_from_config(&config_str, shutdown_rx).await
+        } else {
+            start_proxy_from_config(&config_str, shutdown_rx).await
+        };
+
+        match result {
             Ok(()) => info!("Shoes service stopped normally"),
             Err(e) => error!("Shoes service error: {}", e),
         }
@@ -262,32 +226,26 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_start<'local>(
     let service = TUN_SERVICE.get_or_init(|| parking_lot::Mutex::new(None));
     *service.lock() = Some(handle);
 
-    info!("TUN service started successfully");
+    info!("jniStart: shoes service started");
     1
 }
 
-/// Stop the TUN service.
+/// Останавливает shoes-сервис.
 ///
-/// # Arguments
-/// * `env` - JNI environment
-/// * `_class` - Java class (unused)
-/// * `handle` - Handle returned by startTun (currently unused, we use global state)
+/// * `handle` — значение, возвращённое `jniStart` (зарезервировано для будущего использования).
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_shoesproxy_ShoesNative_stop(
+pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniStop(
     _env: JNIEnv,
     _class: JClass,
     _handle: jlong,
 ) {
+    info!("jniStop: stopping shoes service");
     common::stop_service();
 }
 
-/// Check if the TUN service is running.
-///
-/// # Returns
-/// * JNI_TRUE if running
-/// * JNI_FALSE if not running
+/// Возвращает JNI_TRUE, если сервис запущен.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_shoesproxy_ShoesNative_isRunning(
+pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniIsRunning(
     _env: JNIEnv,
     _class: JClass,
 ) -> jboolean {
@@ -296,4 +254,22 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_isRunning(
     } else {
         JNI_FALSE
     }
+}
+
+/// Устанавливает путь к файлу логов.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniSetLogFile(
+    mut env: JNIEnv,
+    _class: JClass,
+    log_path: JString,
+) -> jint {
+    let path_str: String = match env.get_string(&log_path) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            error!("Failed to get log path string: {}", e);
+            return -1;
+        }
+    };
+
+    setup_log_file(&path_str)
 }

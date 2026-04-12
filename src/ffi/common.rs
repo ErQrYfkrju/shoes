@@ -120,6 +120,64 @@ pub fn is_service_running() -> bool {
     false
 }
 
+/// Start the service in proxy-only mode (no TUN device required).
+///
+/// Parses the config YAML and starts only Server configs (e.g. SOCKS5/HTTP
+/// proxy). Used for Android Proxy mode where no VPN/TUN is involved.
+pub async fn start_proxy_from_config(
+    config_yaml: &str,
+    shutdown_rx: oneshot::Receiver<()>,
+) -> std::io::Result<()> {
+    info!("Parsing config for proxy server");
+
+    let configs: Vec<Config> = load_config_str(config_yaml)?;
+
+    let (configs, pem_count) = convert_cert_paths(configs).await?;
+    if pem_count > 0 {
+        info!("Loaded {} PEM files", pem_count);
+    }
+
+    let crate::config::ValidatedConfigs {
+        configs: validated_configs,
+        dns_groups,
+    } = create_server_configs(configs)?;
+
+    let mut dns_registry = build_dns_registry(dns_groups).await?;
+
+    let mut join_handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+
+    for config in validated_configs {
+        match config {
+            Config::Server(sc) => {
+                let resolver = dns_registry.get_for_server(sc.dns.as_ref());
+                join_handles.extend(
+                    start_servers(Config::Server(sc), resolver).await?,
+                );
+            }
+            _ => {
+                // Ignore TUN and other config types in proxy mode
+            }
+        }
+    }
+
+    if join_handles.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "No server configs found in YAML",
+        ));
+    }
+
+    info!("Proxy servers started, waiting for shutdown signal");
+    let _ = shutdown_rx.await;
+    info!("Shutdown signal received, stopping proxy servers");
+
+    for handle in join_handles {
+        handle.abort();
+    }
+
+    Ok(())
+}
+
 /// Start the service from a config YAML string.
 ///
 /// This parses the config YAML and starts both TUN and any Server configs
