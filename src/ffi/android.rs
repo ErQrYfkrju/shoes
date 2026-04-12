@@ -1,6 +1,6 @@
-//! JNI bindings for ByeByeDPI Android app.
+//! Android JNI bindings for shoes.
 //!
-//! Package: `io.github.cfal.shoes`
+//! Package: `com.shoesproxy`
 //! Class: `ShoesNative`
 //!
 //! # Kotlin interface
@@ -33,7 +33,7 @@ use super::common::{
     start_proxy_from_config,
 };
 
-/// Пишет в Android logcat.
+/// Writes log records to Android logcat.
 struct LogcatWriter;
 
 impl LogWriter for LogcatWriter {
@@ -65,12 +65,12 @@ impl LogWriter for LogcatWriter {
     fn flush(&self) {}
 }
 
-/// Инициализирует библиотеку shoes.
+/// Initializes the shoes library.
 ///
-/// Должна быть вызвана один раз до всех остальных функций.
-/// Возвращает 0 при успехе, -1 при ошибке.
+/// Must be called once before any other function.
+/// Returns 0 on success, -1 on error.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniInit(
+pub extern "system" fn Java_com_shoesproxy_ShoesNative_jniInit(
     mut env: JNIEnv,
     _class: JClass,
     log_level: JString,
@@ -97,19 +97,19 @@ pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniInit(
         crate::logging::init_multi_logger(writers, directives);
     }
 
-    info!("shoes (ByeByeDPI) initialized, log level: {}", level_str);
+    info!("shoes initialized, log level: {}", level_str);
     0
 }
 
-/// Запускает shoes-сервис.
+/// Starts the shoes service.
 ///
-/// * `config_yaml`      — готовый YAML-конфиг (device_fd уже подставлен Kotlin-стороной).
-/// * `protect_callback` — объект с методом `protect(Int): Boolean` (VpnService в VPN-режиме)
-///                        или `null` в Proxy-режиме.
+/// * `config_yaml`      — YAML config string (device_fd already set for VPN mode).
+/// * `protect_callback` — object with `protect(Int): Boolean` method (VpnService in VPN mode)
+///                        or `null` in proxy-only mode.
 ///
-/// Возвращает хэндл > 0 при успехе, -1 при ошибке.
+/// Returns a handle > 0 on success, -1 on error.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniStart<'local>(
+pub extern "system" fn Java_com_shoesproxy_ShoesNative_jniStart<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     config_yaml: JString<'local>,
@@ -125,7 +125,7 @@ pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniStart<'local>(
         }
     };
 
-    // В Proxy-режиме callback == null — защищать сокеты не нужно.
+    // In proxy-only mode the callback is null — no socket protection needed.
     let is_vpn_mode = !protect_callback.is_null();
 
     if is_vpn_mode {
@@ -230,11 +230,11 @@ pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniStart<'local>(
     1
 }
 
-/// Останавливает shoes-сервис.
+/// Stops the shoes service.
 ///
-/// * `handle` — значение, возвращённое `jniStart` (зарезервировано для будущего использования).
+/// * `handle` — value returned by `jniStart` (reserved for future use).
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniStop(
+pub extern "system" fn Java_com_shoesproxy_ShoesNative_jniStop(
     _env: JNIEnv,
     _class: JClass,
     _handle: jlong,
@@ -243,9 +243,9 @@ pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniStop(
     common::stop_service();
 }
 
-/// Возвращает JNI_TRUE, если сервис запущен.
+/// Returns JNI_TRUE if the service is currently running.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniIsRunning(
+pub extern "system" fn Java_com_shoesproxy_ShoesNative_jniIsRunning(
     _env: JNIEnv,
     _class: JClass,
 ) -> jboolean {
@@ -256,9 +256,9 @@ pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniIsRunning(
     }
 }
 
-/// Устанавливает путь к файлу логов.
+/// Sets the log file path for file-based logging.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_cfal_shoes_ShoesNative_jniSetLogFile(
+pub extern "system" fn Java_com_shoesproxy_ShoesNative_jniSetLogFile(
     mut env: JNIEnv,
     _class: JClass,
     log_path: JString,
