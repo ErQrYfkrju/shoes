@@ -2308,7 +2308,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "indexmap",
- "jni 0.22.4",
+ "jni 0.21.1",
  "kcp-tokio",
  "libc",
  "log",
