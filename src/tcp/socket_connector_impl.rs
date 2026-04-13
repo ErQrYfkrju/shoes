@@ -40,7 +40,7 @@ enum TransportConfig {
         next_endpoint_index: AtomicU8,
     },
     Kcp {
-        kcp_config: kcp_tokio::KcpConfig,
+        kcp_config: tokio_kcp::KcpConfig,
     },
 }
 
@@ -323,7 +323,7 @@ impl SocketConnector for SocketConnectorImpl {
             TransportConfig::Kcp { kcp_config } => {
                 let mut last_err: Option<std::io::Error> = None;
                 for (i, target_addr) in target_addrs.iter().enumerate() {
-                    match kcp_tokio::KcpStream::connect(*target_addr, kcp_config.clone()).await {
+                    match tokio_kcp::KcpStream::connect(&kcp_config, *target_addr).await {
                         Ok(stream) => {
                             if i > 0 {
                                 debug!(

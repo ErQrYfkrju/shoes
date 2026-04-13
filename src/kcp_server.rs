@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use kcp_tokio::{KcpConfig, KcpListener};
+use tokio_kcp::{KcpConfig, KcpListener, KcpNoDelayConfig};
 use log::{debug, error};
 use tokio::task::JoinHandle;
 
@@ -13,32 +13,47 @@ use crate::tcp::tcp_handler::TcpServerHandler;
 use crate::tcp::tcp_server::process_stream;
 use crate::tcp::tcp_server_handler_factory::create_tcp_server_handler;
 
-/// Convert `KcpSettings` from YAML config into a `kcp_tokio::KcpConfig`.
+/// Convert `KcpSettings` from YAML config into a `tokio_kcp::KcpConfig`.
 pub fn build_kcp_config(settings: Option<&KcpSettings>) -> KcpConfig {
     let mode = settings
         .map(|s| s.mode.clone())
         .unwrap_or(KcpMode::Normal);
 
-    let mut cfg = match mode {
-        KcpMode::Normal => KcpConfig::new(),
-        KcpMode::Fast => KcpConfig::new().fast_mode(),
-        KcpMode::Turbo => KcpConfig::new().turbo_mode(),
-        KcpMode::Gaming => KcpConfig::gaming(),
-        KcpMode::FileTransfer => KcpConfig::file_transfer(),
-    };
+    let mut cfg = KcpConfig::default();
 
-    // Stream mode delivers data as a continuous byte stream without message boundaries.
-    // FileTransfer already enables it via KcpConfig::file_transfer().
-    // For other modes we leave it at the kcp-tokio default (false = message mode).
-    // In message mode KCP delivers data only when a complete segment is received,
-    // which is fine for proxy operation since TLS records are self-framed.
+    match mode {
+        KcpMode::Normal => {
+            cfg.nodelay = KcpNoDelayConfig::normal();
+        }
+        KcpMode::Fast => {
+            cfg.nodelay = KcpNoDelayConfig {
+                nodelay: true,
+                interval: 20,
+                resend: 2,
+                nc: true,
+            };
+        }
+        KcpMode::Turbo => {
+            cfg.nodelay = KcpNoDelayConfig::fastest();
+        }
+        KcpMode::Gaming => {
+            cfg.nodelay = KcpNoDelayConfig::fastest();
+            cfg.wnd_size = (1024, 1024);
+        }
+        KcpMode::FileTransfer => {
+            cfg.nodelay = KcpNoDelayConfig::normal();
+            cfg.stream = true;
+            cfg.wnd_size = (1024, 1024);
+        }
+    }
 
     if let Some(s) = settings {
         if let (Some(snd), Some(rcv)) = (s.send_window, s.recv_window) {
-            cfg = cfg.window_size(snd, rcv);
+            // tokio_kcp uses u16 window sizes
+            cfg.wnd_size = (snd as u16, rcv as u16);
         }
         if let Some(mtu) = s.mtu {
-            cfg = cfg.mtu(mtu as u32);
+            cfg.mtu = mtu as usize;
         }
     }
 
@@ -51,7 +66,7 @@ async fn run_kcp_server(
     resolver: Arc<dyn Resolver>,
     server_handler: Arc<dyn TcpServerHandler>,
 ) -> std::io::Result<()> {
-    let mut listener = KcpListener::bind(bind_address, kcp_config)
+    let mut listener = KcpListener::bind(kcp_config, bind_address)
         .await
         .map_err(|e| std::io::Error::other(format!("KCP bind failed: {e}")))?;
 

@@ -194,7 +194,7 @@ fn main() {
 
     logging::init_multi_logger(writers, directives);
     // Forward kcp-tokio/kcp-core tracing events to stderr.
-    // Use RUST_LOG=kcp_tokio=trace,kcp_core=trace to see internal KCP events.
+    // Use RUST_LOG=tokio_kcp=trace to see internal KCP events.
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

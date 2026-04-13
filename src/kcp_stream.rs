@@ -1,13 +1,13 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use kcp_tokio::KcpStream;
+use tokio_kcp::KcpStream;
 use log::debug;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use crate::async_stream::{AsyncPing, AsyncStream};
 
-/// Wrapper around `kcp_tokio::KcpStream` that implements the `AsyncStream` trait.
+/// Wrapper around `tokio_kcp::KcpStream` that implements the `AsyncStream` trait.
 pub struct KcpStreamWrapper(KcpStream);
 
 // SAFETY: KcpStream is polled exclusively from a single Tokio task at a time.
