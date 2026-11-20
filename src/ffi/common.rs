@@ -10,8 +10,8 @@ use log::info;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-use crate::config::ResolvedConfig;
 use crate::config::{Config, convert_cert_paths, load_config_str};
+use crate::config::{ResolvedConfig, ResolvedServerProxyConfig};
 use crate::dns::build_dns_registry_for_runtime;
 use crate::logging::{FILE_LOG_FLUSH_TIMEOUT, FileLogWriter, LogWriter};
 use crate::tcp::tcp_server::start_servers;
@@ -74,6 +74,28 @@ pub fn spawn_service(
         let result = start_from_config(&config, shutdown).await;
         if let Err(e) = &result {
             log::error!("Shoes service failed: {e}");
+        }
+        result
+    })
+}
+
+/// Spawn a server-only service used by Android Proxy mode.
+pub fn spawn_proxy_service(
+    runtime: &tokio::runtime::Runtime,
+    config: String,
+    shutdown: oneshot::Receiver<()>,
+    running: Arc<AtomicBool>,
+) -> JoinHandle<std::io::Result<()>> {
+    let guard = ServiceRunGuard {
+        running,
+        #[cfg(unix)]
+        protector: crate::tun::get_global_socket_protector(),
+    };
+    runtime.spawn(async move {
+        let _guard = guard;
+        let result = start_proxy_from_config(&config, shutdown).await;
+        if let Err(e) = &result {
+            log::error!("Shoes proxy service failed: {e}");
         }
         result
     })
@@ -209,17 +231,103 @@ pub fn is_service_running() -> bool {
     false
 }
 
-/// Start the service from a config YAML string.
-///
-/// This parses the config YAML and starts both TUN and any Server configs
-/// (like mixed HTTP+SOCKS5 servers) that are defined in the config.
-/// The config YAML must already have device_fd set in the TUN config.
-pub async fn start_from_config(
+/// Start only local proxy servers without requiring a TUN device.
+pub async fn start_proxy_from_config(
     config_yaml: &str,
-    mut shutdown_rx: oneshot::Receiver<()>,
+    shutdown_rx: oneshot::Receiver<()>,
 ) -> std::io::Result<()> {
-    info!("Parsing config for TUN server");
+    info!("Parsing config for proxy server");
+    let mut validated = compile_ffi_config(config_yaml).await?;
 
+    if validated
+        .configs
+        .iter()
+        .any(|config| matches!(config, ResolvedConfig::TunServer(_)))
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Proxy mode does not accept TUN configs",
+        ));
+    }
+    if validated.configs.iter().any(|config| {
+        matches!(
+            config,
+            ResolvedConfig::Server(server)
+                if matches!(server.protocol, ResolvedServerProxyConfig::Wireguard(_))
+        )
+    }) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "WireGuard requires the process runtime and is not supported by Proxy mode",
+        ));
+    }
+    if validated.configs.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "No server configs found in YAML",
+        ));
+    }
+
+    let mut certificates = crate::certificates::Registry::prepare(&mut validated, None).await?;
+    let crate::config::ValidatedConfigs {
+        configs: validated_configs,
+        dns_groups,
+        global_limits,
+        ..
+    } = validated;
+    crate::resources::configure(global_limits)?;
+    let _resource_reporter = crate::resources::ResourceReporter::start();
+
+    let synthetic_endpoints: Vec<_> = crate::config::tun_endpoint_ips(&validated_configs).collect();
+    let mut dns_registry = build_dns_registry_for_runtime(
+        dns_groups,
+        global_limits,
+        None,
+        &synthetic_endpoints,
+        false,
+    )
+    .await?;
+    let dns_snapshots = dns_registry.snapshot_task();
+    let mut join_handles = ServerTasks(Vec::new());
+
+    for server_config in validated_configs {
+        let ResolvedConfig::Server(server_config) = server_config else {
+            unreachable!("TUN configs were rejected before runtime startup")
+        };
+        let resolver = dns_registry.get_for_server(server_config.dns.as_ref());
+        match start_servers(ResolvedConfig::Server(server_config), resolver).await {
+            Ok(tasks) => join_handles.0.extend(tasks),
+            Err(error) => {
+                join_handles.stop().await;
+                certificates.shutdown().await;
+                drop(dns_snapshots);
+                dns_registry.shutdown_checkpoint().await?;
+                return Err(error);
+            }
+        }
+    }
+
+    if join_handles.0.is_empty() {
+        certificates.shutdown().await;
+        drop(dns_snapshots);
+        dns_registry.shutdown_checkpoint().await?;
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "No proxy listeners started",
+        ));
+    }
+
+    certificates.start().await;
+    let _ = shutdown_rx.await;
+
+    join_handles.stop().await;
+    certificates.shutdown().await;
+    drop(dns_snapshots);
+    dns_registry.shutdown_checkpoint().await?;
+    Ok(())
+}
+
+async fn compile_ffi_config(config_yaml: &str) -> std::io::Result<crate::config::ValidatedConfigs> {
     let config_yaml = config_yaml.to_owned();
     let mut configs: Vec<Config> =
         tokio::task::spawn_blocking(move || load_config_str(&config_yaml))
@@ -247,9 +355,24 @@ pub async fn start_from_config(
         info!("Loaded {} PEM files", pem_count);
     }
 
-    let mut validated = crate::config::compile_configs(configs).await?;
+    let validated = crate::config::compile_configs(configs).await?;
     validated.validate_ffi_support()?;
     crate::dns::check_interception(&validated.configs, &validated.dns_groups).await?;
+    Ok(validated)
+}
+
+/// Start the service from a config YAML string.
+///
+/// This parses the config YAML and starts both TUN and any Server configs
+/// (like mixed HTTP+SOCKS5 servers) that are defined in the config.
+/// The config YAML must already have device_fd set in the TUN config.
+pub async fn start_from_config(
+    config_yaml: &str,
+    mut shutdown_rx: oneshot::Receiver<()>,
+) -> std::io::Result<()> {
+    info!("Parsing config for TUN server");
+
+    let mut validated = compile_ffi_config(config_yaml).await?;
     let mut certificates = crate::certificates::Registry::prepare(&mut validated, None).await?;
     #[cfg(unix)]
     let wireguard = crate::wireguard::Prepared::new(&mut validated).await?;
@@ -400,6 +523,14 @@ mod rule_source_tests;
 #[cfg(all(test, unix))]
 #[path = "ntp_tests.rs"]
 mod ntp_tests;
+
+#[cfg(all(test, unix))]
+#[path = "proxy_tests.rs"]
+mod proxy_tests;
+
+#[cfg(all(test, unix))]
+#[path = "lifecycle_tests.rs"]
+mod lifecycle_tests;
 
 #[cfg(all(test, unix))]
 mod tests {

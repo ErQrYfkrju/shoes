@@ -195,19 +195,27 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_start<'local>(
         return -1;
     }
     info!("Starting shoes service");
+    let is_vpn_mode = !protect_callback.is_null();
 
-    let result = unowned
-        .with_env(
-            |env| -> jni::errors::Result<(String, Global<JObject<'static>>, jni::JavaVM)> {
-                let config_str: String = env.get_string(&config_yaml).map(|s| s.to_string())?;
-                let callback_ref = env.new_global_ref(protect_callback)?;
-                let jvm = env.get_java_vm()?;
-                Ok((config_str, callback_ref, jvm))
-            },
-        )
-        .into_outcome();
+    let result =
+        unowned
+            .with_env(
+                |env| -> jni::errors::Result<(
+                    String,
+                    Option<(Global<JObject<'static>>, jni::JavaVM)>,
+                )> {
+                    let config_str: String = env.get_string(&config_yaml).map(|s| s.to_string())?;
+                    let callback = if is_vpn_mode {
+                        Some((env.new_global_ref(protect_callback)?, env.get_java_vm()?))
+                    } else {
+                        None
+                    };
+                    Ok((config_str, callback))
+                },
+            )
+            .into_outcome();
 
-    let (config_str, callback_ref, jvm) = match result {
+    let (config_str, callback) = match result {
         Outcome::Ok(v) => v,
         Outcome::Err(e) => {
             error!("Failed to extract JNI values for start: {}", e);
@@ -215,37 +223,42 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_start<'local>(
         }
         Outcome::Panic(_) => return -1,
     };
-    let jvm: Arc<jni::JavaVM> = Arc::new(jvm);
+    if let Some((callback_ref, jvm)) = callback {
+        let jvm: Arc<jni::JavaVM> = Arc::new(jvm);
 
-    // Socket protector calls VpnService.protect() to exempt sockets from VPN routing
-    let callback_ref: Arc<Global<JObject<'static>>> = Arc::new(callback_ref);
-    let jvm_clone = jvm.clone();
-    let callback_clone = callback_ref.clone();
+        // Socket protector calls VpnService.protect() to exempt sockets from VPN routing
+        let callback_ref: Arc<Global<JObject<'static>>> = Arc::new(callback_ref);
+        let jvm_clone = jvm.clone();
+        let callback_clone = callback_ref.clone();
 
-    let protector = FnSocketProtector::new(move |fd: i32| {
-        let protect_ok = jvm_clone
-            .attach_current_thread(|env: &mut jni::Env| -> jni::errors::Result<bool> {
-                let v = env.call_method(
-                    &*callback_clone,
-                    jni::jni_str!("protect"),
-                    jni::jni_sig!("(I)Z"),
-                    &[JValue::Int(fd)],
-                )?;
-                Ok(v.z().unwrap_or(false))
-            })
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", e)))?;
+        let protector = FnSocketProtector::new(move |fd: i32| {
+            let protect_ok = jvm_clone
+                .attach_current_thread(|env: &mut jni::Env| -> jni::errors::Result<bool> {
+                    let v = env.call_method(
+                        &*callback_clone,
+                        jni::jni_str!("protect"),
+                        jni::jni_sig!("(I)Z"),
+                        &[JValue::Int(fd)],
+                    )?;
+                    Ok(v.z().unwrap_or(false))
+                })
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", e)))?;
 
-        if protect_ok {
-            Ok(())
-        } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "VpnService.protect() returned false",
-            ))
-        }
-    });
+            if protect_ok {
+                Ok(())
+            } else {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "VpnService.protect() returned false",
+                ))
+            }
+        });
 
-    set_global_socket_protector(Arc::new(protector));
+        set_global_socket_protector(Arc::new(protector));
+    } else {
+        // Proxy mode replaces stale VPN callbacks with an explicit no-op.
+        set_global_socket_protector(Arc::new(crate::tun::NoOpSocketProtector));
+    }
 
     crate::thread_util::set_num_threads(2);
     let runtime = match tokio::runtime::Builder::new_multi_thread()
@@ -263,7 +276,11 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_start<'local>(
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let task = common::spawn_service(&runtime, config_str, shutdown_rx, running.clone());
+    let task = if is_vpn_mode {
+        common::spawn_service(&runtime, config_str, shutdown_rx, running.clone())
+    } else {
+        common::spawn_proxy_service(&runtime, config_str, shutdown_rx, running.clone())
+    };
 
     let handle = TunServiceHandle {
         runtime,
