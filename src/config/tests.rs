@@ -178,6 +178,7 @@ fn tcp_settings_reject_unknown_fields_for_servers_and_clients() {
 async fn representative_examples_pass_native_validation() {
     for example in [
         "quickstart_socks.yaml",
+        "kcp.yaml",
         "socks_basic.yaml",
         "snell.yaml",
         "snell_forward_rules.yaml",
@@ -207,4 +208,258 @@ async fn representative_examples_pass_native_validation() {
         }
         assert!(!validated.configs.is_empty(), "{example}");
     }
+}
+
+#[tokio::test]
+async fn android_representative_assets_pass_native_validation() {
+    for asset in ["android_vpn.yaml", "android_proxy_kcp.yaml"] {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("examples")
+            .join(asset);
+        let configs = load_configs(&[path.to_str().unwrap().into()])
+            .await
+            .unwrap_or_else(|error| panic!("{asset}: {error}"));
+        let validated = compile_configs(configs)
+            .await
+            .unwrap_or_else(|error| panic!("{asset}: {error}"));
+        validated
+            .validate_ffi_support()
+            .unwrap_or_else(|error| panic!("{asset}: {error}"));
+        assert!(!validated.configs.is_empty(), "{asset}");
+    }
+
+    let vpn = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/android_vpn.yaml"),
+    )
+    .unwrap();
+    assert!(vpn.contains("device_fd: -1"));
+}
+
+#[tokio::test]
+async fn kcp_server_config_preserves_settings() {
+    let configs = parse_config_yaml(
+        r#"- address: '127.0.0.1:1080'
+  transport: kcp
+  kcp_settings:
+    mode: file_transfer
+    send_window: 128
+    recv_window: 256
+    mtu: 1400
+    max_sessions: 32
+  protocol: {type: socks}
+"#,
+    )
+    .unwrap();
+    let validated = compile_configs(configs).await.unwrap();
+    let super::ResolvedConfig::Server(server) = &validated.configs[0] else {
+        panic!("expected a resolved server config");
+    };
+
+    assert_eq!(server.transport, super::Transport::Kcp);
+    let settings = server.kcp_settings.as_ref().unwrap();
+    assert_eq!(settings.mode, super::KcpMode::FileTransfer);
+    assert_eq!(settings.send_window, Some(128));
+    assert_eq!(settings.recv_window, Some(256));
+    assert_eq!(settings.mtu, Some(1400));
+    assert_eq!(settings.max_sessions, 32);
+}
+
+#[tokio::test]
+async fn kcp_client_config_preserves_settings() {
+    let configs = parse_config_yaml(
+        r#"- address: '127.0.0.1:1080'
+  protocol: {type: socks}
+  rules:
+    - masks: '0.0.0.0/0'
+      action: allow
+      client_chain:
+        - address: '192.0.2.1:1080'
+          transport: kcp
+          kcp_settings:
+            mode: fast
+            send_window: 64
+            recv_window: 128
+            mtu: 1300
+            max_sessions: 16
+          protocol: {type: socks}
+"#,
+    )
+    .unwrap();
+    let validated = compile_configs(configs).await.unwrap();
+    let super::ResolvedConfig::Server(server) = &validated.configs[0] else {
+        panic!("expected a resolved server config");
+    };
+    let rules = server.rules.clone().into_vec();
+    let super::ResolvedRuleActionConfig::Allow { client_chains, .. } = &rules[0].action else {
+        panic!("expected an allow rule with a client chain");
+    };
+    let chains = client_chains.clone().into_vec();
+    let chain = chains.first().unwrap();
+    let hop = chain.hops.iter().next().unwrap();
+    let super::ResolvedClientHop::Single(client) = hop else {
+        panic!("expected a single resolved client hop");
+    };
+
+    assert_eq!(client.transport, super::Transport::Kcp);
+    let settings = client.kcp_settings.as_ref().unwrap();
+    assert_eq!(settings.mode, super::KcpMode::Fast);
+    assert_eq!(settings.send_window, Some(64));
+    assert_eq!(settings.recv_window, Some(128));
+    assert_eq!(settings.mtu, Some(1300));
+    assert_eq!(settings.max_sessions, 16);
+}
+
+#[test]
+fn kcp_file_transfer_mode_aliases_deserialize() {
+    for name in ["file_transfer", "filetransfer"] {
+        let settings: super::KcpSettings = serde_yaml::from_str(&format!("mode: {name}\n"))
+            .unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert_eq!(settings.mode, super::KcpMode::FileTransfer);
+    }
+}
+
+fn reset_kcp_network_spies() {
+    crate::kcp_server::reset_test_bind_calls();
+    crate::tcp::socket_connector_impl::reset_test_dial_calls();
+}
+
+fn assert_kcp_network_unused() {
+    assert_eq!(
+        crate::kcp_server::test_bind_calls(),
+        0,
+        "KCP bind was called"
+    );
+    assert_eq!(
+        crate::tcp::socket_connector_impl::test_dial_calls(),
+        0,
+        "KCP dial was called"
+    );
+}
+
+async fn assert_kcp_rejected_without_network(yaml: &str, expected: &str) {
+    reset_kcp_network_spies();
+    let configs = match parse_config_yaml(yaml) {
+        Ok(configs) => configs,
+        Err(error) => {
+            let diagnostic = error.to_string();
+            assert!(diagnostic.contains(expected), "{diagnostic}");
+            assert_kcp_network_unused();
+            return;
+        }
+    };
+    let error = match compile_configs(configs).await {
+        Ok(_) => panic!("invalid KCP configuration must reject"),
+        Err(error) => error,
+    };
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+    let diagnostic = error.to_string();
+    assert!(diagnostic.contains(expected), "{diagnostic}");
+    assert_kcp_network_unused();
+}
+
+#[tokio::test]
+async fn kcp_settings_reject_unknown_fields() {
+    let server_yaml = r#"- address: '127.0.0.1:1080'
+  transport: kcp
+  kcp_settings: {unsupported_policy: true}
+  protocol: {type: socks}
+"#;
+    assert_kcp_rejected_without_network(server_yaml, "unknown field `unsupported_policy`").await;
+
+    reset_kcp_network_spies();
+    let error = serde_yaml::from_str::<super::ClientConfig>(
+        r#"address: '192.0.2.1:1080'
+transport: kcp
+kcp_settings: {unsupported_policy: true}
+protocol: {type: socks}
+"#,
+    )
+    .unwrap_err();
+    let diagnostic = error.to_string();
+    assert!(
+        diagnostic.contains("unknown field `unsupported_policy`"),
+        "{diagnostic}"
+    );
+    assert_kcp_network_unused();
+}
+
+#[tokio::test]
+async fn kcp_window_settings_reject_invalid_ranges() {
+    for (settings, expected) in [
+        ("send_window: 0\n    recv_window: 128", "send_window"),
+        ("send_window: 65536\n    recv_window: 128", "send_window"),
+        ("send_window: 128\n    recv_window: 65536", "recv_window"),
+    ] {
+        let yaml = format!(
+            r#"- address: '127.0.0.1:1080'
+  transport: kcp
+  kcp_settings:
+    {settings}
+  protocol: {{type: socks}}
+"#
+        );
+        assert_kcp_rejected_without_network(&yaml, expected).await;
+    }
+}
+
+#[tokio::test]
+async fn kcp_window_settings_require_a_complete_pair() {
+    let yaml = r#"- address: '127.0.0.1:1080'
+  transport: kcp
+  kcp_settings:
+    send_window: 128
+  protocol: {type: socks}
+"#;
+    assert_kcp_rejected_without_network(yaml, "specified together").await;
+}
+
+#[tokio::test]
+async fn kcp_mtu_rejects_unsupported_values() {
+    for mtu in [24, 65_536] {
+        let yaml = format!(
+            r#"- address: '127.0.0.1:1080'
+  transport: kcp
+  kcp_settings:
+    mtu: {mtu}
+  protocol: {{type: socks}}
+"#
+        );
+        assert_kcp_rejected_without_network(&yaml, "mtu").await;
+    }
+}
+
+#[tokio::test]
+async fn kcp_max_sessions_rejects_zero() {
+    let yaml = r#"- address: '127.0.0.1:1080'
+  transport: kcp
+  kcp_settings:
+    max_sessions: 0
+  protocol: {type: socks}
+"#;
+    assert_kcp_rejected_without_network(yaml, "max_sessions").await;
+}
+
+#[tokio::test]
+async fn kcp_client_requires_peer_address() {
+    let yaml = r#"- address: '127.0.0.1:1080'
+  protocol: {type: socks}
+  rules:
+    - masks: '0.0.0.0/0'
+      action: allow
+      client_chain:
+        - transport: kcp
+          kcp_settings: {mode: fast}
+          protocol: {type: socks}
+"#;
+    assert_kcp_rejected_without_network(yaml, "address").await;
+}
+
+#[tokio::test]
+async fn kcp_settings_require_kcp_transport() {
+    let yaml = r#"- address: '127.0.0.1:1080'
+  transport: tcp
+  kcp_settings: {mode: fast}
+  protocol: {type: socks}
+"#;
+    assert_kcp_rejected_without_network(yaml, "KCP transport is not selected").await;
 }

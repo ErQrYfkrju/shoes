@@ -20,6 +20,8 @@ mod http_host_sniffing;
 mod hysteria2;
 #[path = "cases/integration/hysteria2_udp_integration.rs"]
 mod hysteria2_udp;
+#[path = "cases/integration/kcp_integration.rs"]
+mod kcp;
 #[path = "cases/integration/naiveproxy_integration.rs"]
 mod naiveproxy;
 #[path = "cases/integration/plain_tcp_relay.rs"]

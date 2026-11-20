@@ -293,6 +293,7 @@ impl Inline for ResolvedServerConfig {
             transport: source.transport,
             tcp_settings: source.tcp_settings,
             quic_settings: source.quic_settings,
+            kcp_settings: source.kcp_settings,
             rules: rules(source.rules),
             dns: source.dns.map(ResolvedDnsConfig::inline),
         }

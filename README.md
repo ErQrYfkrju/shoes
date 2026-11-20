@@ -46,10 +46,29 @@ All server protocols plus:
 - **TLS**
 - **WebSocket** (Shadowsocks SIP003)
 - **XHTTP / SplitHTTP** (packet-up, stream-up, stream-one over HTTP/1.1, HTTP/2, HTTP/3)
+- **KCP** (reliable UDP streams with configurable pre-accept session limits)
 - **XTLS Reality**
   - Hybrid-first X25519MLKEM768 key exchange and optional ML-DSA-65 server authentication
 - **XTLS Vision** (for VLESS)
 - **Sudoku TCP mask** (Xray FinalMask-compatible, composable client/server wrapper; [configuration](https://shoes-rs.github.io/protocols/sudoku/))
+
+KCP uses `transport: kcp` and shared client/server `kcp_settings`:
+
+```yaml
+transport: kcp
+kcp_settings:
+  mode: file_transfer       # normal | fast | turbo | gaming | file_transfer
+  send_window: 256          # 1..=65535; specify both windows together
+  recv_window: 256          # 1..=65535; specify both windows together
+  mtu: 1400                 # 25..=65535 bytes
+  max_sessions: 128         # pre-accept sessions; >= 1 (default: 1024)
+```
+
+The canonical bulk-transfer mode is `file_transfer`; legacy `filetransfer` is
+accepted as an alias. `kcp_settings` is rejected for other transports. See the
+[complete KCP example](examples/kcp.yaml),
+[client fields](https://shoes-rs.github.io/config/client/) and
+[server fields](https://shoes-rs.github.io/config/server/).
 
 ### TUN/VPN Mode
 - **WireGuard** - Userspace TCP/UDP server and client protocols using GotaTun, without root, an OS TUN, or host route changes (Unix only). See [WireGuard configuration](https://shoes-rs.github.io/protocols/wireguard/).
@@ -71,7 +90,7 @@ same cipher and run v0.3.3 or newer for AES-256 or ChaCha20.
 
 ## Features
 
-- **Multi-transport**: TCP or QUIC for all protocols
+- **Multi-transport**: TCP, QUIC or KCP for supported protocols
 - **TLS with SNI routing**: Select the outer TLS handler by Server Name Indication
 - **Opt-in TCP hostname sniffing**: Match inner TLS SNI or cleartext HTTP/1 Host without changing the connection destination ([TLS example](examples/sni_sniffing.yaml), [HTTP example](examples/http_host_sniffing.yaml), [semantics](https://shoes-rs.github.io/routing/rules/#tcp-hostname-sniffing))
 - **Upstream proxy chaining**: Multi-hop chains with load balancing

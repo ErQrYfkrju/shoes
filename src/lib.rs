@@ -58,6 +58,8 @@ mod h2mux;
 mod http2;
 mod http_handler;
 mod hysteria2_server;
+mod kcp_server;
+mod kcp_stream;
 mod listener_tasks;
 mod mixed_handler;
 mod naiveproxy;

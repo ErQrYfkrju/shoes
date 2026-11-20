@@ -20,6 +20,7 @@ fn create_test_client_config() -> ClientConfig {
         transport: Transport::Tcp,
         tcp_settings: None,
         quic_settings: None,
+        kcp_settings: None,
     }
 }
 
@@ -69,6 +70,7 @@ fn test_client_config_group() {
                 transport: Transport::Tcp,
                 tcp_settings: None,
                 quic_settings: None,
+                kcp_settings: None,
             })
             .into(),
         ]),

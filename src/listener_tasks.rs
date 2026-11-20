@@ -125,6 +125,10 @@ impl ListenerTasks {
         self.tasks.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.tasks.len()
+    }
+
     pub async fn join_next(&mut self) {
         if let Some(Err(error)) = self.tasks.join_next().await {
             log::warn!("Connection task failed: {error}");

@@ -6,6 +6,8 @@
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+#[cfg(test)]
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::task::{Context, Poll};
 
@@ -19,6 +21,8 @@ use tokio::net::UdpSocket;
 use crate::address::{NetLocation, ResolvedLocation};
 use crate::async_stream::AsyncStream;
 use crate::config::{ClientQuicConfig, ResolvedClientConfig, Transport, quic_client::Obfuscation};
+use crate::kcp_server::build_kcp_config;
+use crate::kcp_stream::KcpStreamWrapper;
 use crate::quic_endpoint::QuicEndpoint;
 use crate::quic_stream::QuicStream;
 use crate::resolver::{Resolver, resolve_addresses, resolve_location};
@@ -33,6 +37,28 @@ const TCP_FALLBACK_DELAY: std::time::Duration = std::time::Duration::from_millis
 const TCP_ATTEMPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 const NATIVE_QUIC_ATTEMPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const MAX_TCP_ATTEMPTS: usize = 2;
+
+#[cfg(not(test))]
+fn record_dial_attempt() {}
+
+#[cfg(test)]
+static KCP_DIAL_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(test)]
+pub(crate) fn reset_test_dial_calls() {
+    KCP_DIAL_CALLS.store(0, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+pub(crate) fn test_dial_calls() -> usize {
+    KCP_DIAL_CALLS.load(Ordering::SeqCst)
+}
+
+#[cfg(test)]
+#[allow(dead_code)] // Called by the actual KCP dial entry point.
+pub(crate) fn record_dial_attempt() {
+    KCP_DIAL_CALLS.fetch_add(1, Ordering::SeqCst);
+}
 
 fn interleave_tcp_addresses(addresses: Vec<SocketAddr>) -> Vec<SocketAddr> {
     let Some(first) = addresses.first() else {
@@ -146,6 +172,9 @@ enum TransportConfig {
         next_endpoint_index: AtomicU8,
         hopping: Option<Box<HoppingEndpoint>>,
         native: bool,
+    },
+    Kcp {
+        config: tokio_kcp::KcpConfig,
     },
 }
 
@@ -404,6 +433,9 @@ impl SocketConnectorImpl {
                     native: is_native,
                 }
             }
+            Transport::Kcp => TransportConfig::Kcp {
+                config: build_kcp_config(config.kcp_settings.as_ref())?,
+            },
         };
 
         Ok(Self {
@@ -548,6 +580,30 @@ impl SocketConnector for SocketConnectorImpl {
                     Ok(Box::new(QuicStream::from(send, recv)) as Box<dyn AsyncStream>)
                 })
                 .await
+            }
+            TransportConfig::Kcp { config } => {
+                let target_addrs = match address.resolved_addr() {
+                    Some(resolved) => vec![resolved],
+                    None => resolve_addresses(resolver, address.location()).await?,
+                };
+                let (stream, peer) = connect_tcp_candidates(target_addrs, |target_addr| {
+                    record_dial_attempt();
+                    let socket =
+                        new_udp_socket(target_addr.is_ipv6(), self.bind_interface.clone())?;
+                    Ok(async move {
+                        let stream =
+                            tokio_kcp::KcpStream::connect_with_socket(config, socket, target_addr)
+                                .await
+                                .map_err(|error| {
+                                    std::io::Error::other(format!(
+                                        "KCP connect to {target_addr} failed: {error}"
+                                    ))
+                                })?;
+                        Ok((stream, target_addr))
+                    })
+                })
+                .await?;
+                Ok(Box::new(KcpStreamWrapper::new(stream, peer)))
             }
         }
     }

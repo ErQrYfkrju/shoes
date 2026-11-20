@@ -1,0 +1,6 @@
+source = "https://github.com/deepseeksss/tokio_kcp"
+rev = "2b446e9c1ea503329cc3bb3f7d8ea1fad830c5d8"
+patches = [
+  "Enforce KcpConfig.max_sessions before creating pre-accept sessions",
+  "Remove payload bytes from KCP trace logs",
+]

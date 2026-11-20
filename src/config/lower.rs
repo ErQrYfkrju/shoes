@@ -16,6 +16,7 @@ pub(super) fn client(
         transport: source.transport,
         tcp_settings: source.tcp_settings,
         quic_settings: source.quic_settings,
+        kcp_settings: source.kcp_settings,
     }
 }
 

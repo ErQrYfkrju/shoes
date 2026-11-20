@@ -443,6 +443,7 @@ mod tests {
                 client_fingerprints: NoneOrSome::None,
                 num_endpoints: 2,
             }),
+            kcp_settings: None,
             rules: NoneOrSome::One(rule),
             dns: None,
         };

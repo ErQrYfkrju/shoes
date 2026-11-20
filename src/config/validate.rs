@@ -19,12 +19,31 @@ use super::pem::{embed_optional_pem_from_map, embed_pem_from_map};
 use super::types::{
     BindLocation, ClientChain, ClientChainHop, ClientConfig, ClientProxyConfig, Config,
     ConfigSelection, DEFAULT_REALITY_SHORT_ID, DnsConfig, DnsConfigGroup, DnsServerSpec,
-    ExpandedDnsGroup, ExpandedDnsSpec, GlobalLimits, PemSource, RuleActionConfig, RuleConfig,
-    ServerConfig, ServerProxyConfig, ServerQuicConfig, ShadowTlsServerHandshakeConfig,
+    ExpandedDnsGroup, ExpandedDnsSpec, GlobalLimits, KcpSettings, PemSource, RuleActionConfig,
+    RuleConfig, ServerConfig, ServerProxyConfig, ServerQuicConfig, ShadowTlsServerHandshakeConfig,
     ShadowsocksConfig, TlsServerConfig, Transport, TunConfig, direct_allow_rule,
 };
 
 const MIN_TLS_BUFFER_SIZE: usize = 16 * 1024;
+
+fn validate_kcp_transport(
+    transport: &Transport,
+    settings: Option<&KcpSettings>,
+) -> std::io::Result<()> {
+    if transport != &Transport::Kcp {
+        if settings.is_some() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "KCP transport is not selected but KCP settings specified",
+            ));
+        }
+        return Ok(());
+    }
+    if let Some(settings) = settings {
+        settings.validate()?;
+    }
+    Ok(())
+}
 
 /// Result of config validation containing server configs and expanded DNS groups.
 /// DNS resolvers are built at runtime from the expanded groups.
@@ -1199,6 +1218,10 @@ fn resolve_server_config(
     named_pems: &HashMap<String, String>,
     global_limits: GlobalLimits,
 ) -> std::io::Result<ResolvedServerConfig> {
+    validate_kcp_transport(
+        &server_config.transport,
+        server_config.kcp_settings.as_ref(),
+    )?;
     crate::sudoku_mask::validate_server(&server_config.protocol, &server_config.transport)?;
     if let ServerProxyConfig::Wireguard(config) = &server_config.protocol {
         if server_config.transport != Transport::Udp
@@ -1259,6 +1282,7 @@ fn resolve_server_config(
             transport: server_config.transport,
             tcp_settings: server_config.tcp_settings,
             quic_settings: server_config.quic_settings,
+            kcp_settings: server_config.kcp_settings,
             rules,
             dns: resolve_dns_binding(server_config.dns),
         });
@@ -1389,6 +1413,7 @@ fn resolve_server_config(
         transport: server_config.transport,
         tcp_settings: server_config.tcp_settings,
         quic_settings: server_config.quic_settings,
+        kcp_settings: server_config.kcp_settings,
         rules,
         dns: resolve_dns_binding(server_config.dns),
     })
@@ -1636,6 +1661,16 @@ pub(super) fn resolve_client_config(
 ) -> std::io::Result<ResolvedClientConfig> {
     #[cfg(test)]
     tests::CLIENT_VALIDATIONS.with(|count| count.set(count.get() + 1));
+    validate_kcp_transport(
+        &client_config.transport,
+        client_config.kcp_settings.as_ref(),
+    )?;
+    if client_config.transport == Transport::Kcp && client_config.address.is_unspecified() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "KCP transport requires a peer address",
+        ));
+    }
     crate::sudoku_mask::validate_client(&client_config.protocol, &client_config.transport)?;
     client_config.validate_quic_key_exchange(true)?;
     crate::quic_client::validate(&client_config, true)?;

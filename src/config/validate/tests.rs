@@ -2441,6 +2441,7 @@ async fn test_server_dns_with_group_ref() {
             transport: Transport::Tcp,
             tcp_settings: None,
             quic_settings: None,
+            kcp_settings: None,
             rules: direct_allow_rule(),
             dns: Some(DnsConfig {
                 hosts: Default::default(),
@@ -2495,6 +2496,7 @@ async fn test_server_dns_with_mixed_group_and_url() {
             transport: Transport::Tcp,
             tcp_settings: None,
             quic_settings: None,
+            kcp_settings: None,
             rules: direct_allow_rule(),
             dns: Some(DnsConfig {
                 hosts: Default::default(),
@@ -2563,6 +2565,7 @@ async fn test_server_dns_with_multiple_group_refs() {
             transport: Transport::Tcp,
             tcp_settings: None,
             quic_settings: None,
+            kcp_settings: None,
             rules: direct_allow_rule(),
             dns: Some(DnsConfig {
                 hosts: Default::default(),
@@ -2618,6 +2621,7 @@ async fn test_server_dns_unknown_group_ref() {
         transport: Transport::Tcp,
         tcp_settings: None,
         quic_settings: None,
+        kcp_settings: None,
         rules: direct_allow_rule(),
         dns: Some(DnsConfig {
             hosts: Default::default(),

@@ -601,6 +601,7 @@ async fn start_tcp_or_quic_servers(
                 "UDP listener transport is not supported",
             ));
         }
+        Transport::Kcp => crate::kcp_server::start_kcp_servers(config, resolver).await?,
     };
 
     if join_handles.is_empty() {

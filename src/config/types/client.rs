@@ -13,7 +13,7 @@ use super::common::{
 };
 use super::server::WebsocketPingType;
 use super::shadowsocks::ShadowsocksConfig;
-use super::transport::{ClientQuicConfig, TcpConfig, Transport};
+use super::transport::{ClientQuicConfig, KcpSettings, TcpConfig, Transport};
 
 /// Configuration for h2mux (HTTP/2 multiplexing) on protocols that support it.
 ///
@@ -321,6 +321,8 @@ pub struct ClientRecord<P> {
     pub tcp_settings: Option<TcpConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quic_settings: Option<ClientQuicConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kcp_settings: Option<KcpSettings>,
 }
 
 pub type ClientConfig = ClientRecord<ClientProxyConfig>;
@@ -346,6 +348,7 @@ impl<'de> Deserialize<'de> for ClientConfig {
             transport: Option<Transport>,
             tcp_settings: Option<TcpConfig>,
             quic_settings: Option<ClientQuicConfig>,
+            kcp_settings: Option<KcpSettings>,
         }
         let fields = Fields::deserialize(deserializer)?;
         let transport = fields.transport.unwrap_or_else(|| {
@@ -366,6 +369,7 @@ impl<'de> Deserialize<'de> for ClientConfig {
             transport,
             tcp_settings: fields.tcp_settings,
             quic_settings: fields.quic_settings,
+            kcp_settings: fields.kcp_settings,
         })
     }
 }
@@ -381,6 +385,7 @@ impl Default for ClientConfig {
             transport: Transport::default(),
             tcp_settings: None,
             quic_settings: None,
+            kcp_settings: None,
         }
     }
 }
@@ -866,6 +871,7 @@ mod tests {
             transport: Transport::Tcp,
             tcp_settings: None,
             quic_settings: None,
+            kcp_settings: None,
         }
     }
 

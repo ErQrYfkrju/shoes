@@ -175,6 +175,7 @@ impl Default for ResolvedClientConfig {
             transport: super::Transport::default(),
             tcp_settings: None,
             quic_settings: None,
+            kcp_settings: None,
         }
     }
 }

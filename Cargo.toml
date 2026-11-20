@@ -182,6 +182,7 @@ socket2 = { version = "*", features = ["all"] }
 sntpc = { version = "=0.11.0", default-features = false }
 subtle = "*"
 tendns = { version = "0.2", default-features = false }
+tokio_kcp = { path = "vendor/tokio_kcp" }
 tokio = { version = "*", features = [
     "fs",
     "io-util",

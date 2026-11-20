@@ -35,7 +35,7 @@ sniff: false                  # TCP hostname sniffing, default false
 dns: {servers: system}        # Optional resolver configuration
 
 # Transport layer (default: tcp)
-transport: tcp | quic          # WireGuard only: udp (default, required)
+transport: tcp | quic | kcp    # WireGuard only: udp (default, required)
 
 # TCP settings (only when transport: tcp)
 tcp_settings:
@@ -52,6 +52,14 @@ quic_settings:
   num_endpoints: int           # Optional, 0 = auto (based on thread count)
   key_exchange_groups: [X25519MLKEM768] # Optional; see TLS key exchange
 
+# KCP settings (optional when transport: kcp)
+kcp_settings:
+  mode: fast                   # normal | fast | turbo | gaming | file_transfer
+  send_window: 256             # Packets; 1..=65535; set both windows together
+  recv_window: 256             # Packets; 1..=65535; set both windows together
+  mtu: 1400                    # Bytes; 25..=65535
+  max_sessions: 1024           # Pre-accept sessions; integer >= 1
+
 # Routing rules (default: allow-all-direct; WireGuard requires explicit nonempty rules)
 rules: string | [RuleConfig]
 ```
@@ -59,3 +67,8 @@ rules: string | [RuleConfig]
 Use either `certificate_source` or `cert`/`key`, not both; see
 [certificate sources](/security/certificates/). For supported hybrid and
 classical groups, see [TLS key exchange](/security/tls-key-exchange/).
+
+KCP uses UDP bind addresses and rejects Unix socket paths. `kcp_settings` is
+rejected for other transports. `filetransfer` is accepted as a legacy alias for
+`file_transfer`. The session limit applies before a peer session is created,
+not only after accept.

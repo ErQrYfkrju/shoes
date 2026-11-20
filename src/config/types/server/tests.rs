@@ -58,6 +58,7 @@ fn create_test_server_config_http() -> ServerConfig {
         transport: Transport::Tcp,
         tcp_settings: Some(TcpConfig { no_delay: true }),
         quic_settings: None,
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }
@@ -77,6 +78,7 @@ fn create_test_server_config_socks() -> ServerConfig {
         transport: Transport::Tcp,
         tcp_settings: None,
         quic_settings: None,
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }
@@ -97,6 +99,7 @@ fn create_test_server_config_shadowsocks() -> ServerConfig {
         transport: Transport::Tcp,
         tcp_settings: None,
         quic_settings: None,
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }
@@ -133,6 +136,7 @@ fn create_test_server_config_vless() -> ServerConfig {
             client_fingerprints: NoneOrSome::None,
             num_endpoints: 1,
         }),
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }
@@ -154,6 +158,7 @@ fn create_test_server_config_trojan() -> ServerConfig {
         transport: Transport::Tcp,
         tcp_settings: None,
         quic_settings: None,
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }
@@ -211,6 +216,7 @@ fn create_test_server_config_tls() -> ServerConfig {
         transport: Transport::Tcp,
         tcp_settings: None,
         quic_settings: None,
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }
@@ -230,6 +236,7 @@ fn create_test_server_config_vmess() -> ServerConfig {
         transport: Transport::Tcp,
         tcp_settings: None,
         quic_settings: None,
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }
@@ -258,6 +265,7 @@ fn create_test_server_config_websocket() -> ServerConfig {
         transport: Transport::Tcp,
         tcp_settings: None,
         quic_settings: None,
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }
@@ -278,6 +286,7 @@ fn create_test_server_config_port_forward() -> ServerConfig {
         transport: Transport::Tcp,
         tcp_settings: None,
         quic_settings: None,
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }
@@ -306,6 +315,7 @@ fn create_test_server_config_hysteria2() -> ServerConfig {
             client_fingerprints: NoneOrSome::None,
             num_endpoints: 1,
         }),
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }
@@ -335,6 +345,7 @@ fn create_test_server_config_tuic() -> ServerConfig {
             client_fingerprints: NoneOrSome::None,
             num_endpoints: 1,
         }),
+        kcp_settings: None,
         rules: NoneOrSome::None,
         dns: None,
     }

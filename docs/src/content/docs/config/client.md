@@ -9,14 +9,14 @@ This is a field sketch, not a complete config. Set `address` to the proxy
 endpoint and choose a [client protocol](/protocols/socks5/); reference the
 client from a [chain or named group](/routing/chains/). Optional `name`
 identifies an inline group member in the controller. `tcp_settings` applies to
-TCP; `quic_settings` applies to QUIC. See [TLS key exchange](/security/tls-key-exchange/)
+TCP, `quic_settings` to QUIC and `kcp_settings` to KCP. See [TLS key exchange](/security/tls-key-exchange/)
 for supported groups and [certificates](/security/certificates/) for identity sources.
 
 ```yaml
 address: string                # Proxy server address (e.g., "proxy.example.com:1080")
 protocol: ClientProxyConfig
 name: string?                 # Optional named group member
-transport: tcp | quic          # Default: tcp; WireGuard only: udp (default, required)
+transport: tcp | quic | kcp    # Default: tcp; WireGuard only: udp (default, required)
 bind_interface: string         # Optional, Linux/Android/Fuchsia only
 
 tcp_settings:
@@ -30,10 +30,21 @@ quic_settings:
   cert: string                 # Client certificate for mTLS
   key: string                  # Client key for mTLS
   key_exchange_groups: [X25519MLKEM768] # Optional; see TLS key exchange
+
+kcp_settings:
+  mode: fast                   # normal | fast | turbo | gaming | file_transfer
+  send_window: 256             # Packets; 1..=65535; set both windows together
+  recv_window: 256             # Packets; 1..=65535; set both windows together
+  mtu: 1400                    # Bytes; 25..=65535
+  max_sessions: 1024           # Pre-accept sessions; integer >= 1
 ```
 
 WireGuard clients use `address` for their peer endpoint and reject TCP/QUIC
 socket settings. See [WireGuard](/protocols/wireguard/) for their protocol fields.
+
+KCP requires an explicit peer `address`. `kcp_settings` is rejected for other
+transports. `filetransfer` is accepted as a legacy alias for `file_transfer`.
+The session limit applies before a peer session is created, not only after accept.
 
 For QUIC, an omitted `sni_hostname` sends SNI for a hostname address; explicit
 `null` suppresses wire SNI. Certificate verification still uses the proxy

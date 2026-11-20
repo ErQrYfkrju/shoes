@@ -56,5 +56,7 @@ pub use server::{
 };
 pub use shadowsocks::ShadowsocksConfig;
 pub use tls::TlsKeyExchangeGroups;
-pub use transport::{BindLocation, ClientQuicConfig, ServerQuicConfig, TcpConfig, Transport};
+pub use transport::{
+    BindLocation, ClientQuicConfig, KcpMode, KcpSettings, ServerQuicConfig, TcpConfig, Transport,
+};
 pub use tun::TunConfig;
