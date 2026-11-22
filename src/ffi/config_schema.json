@@ -1,0 +1,2756 @@
+{
+  "server_protocols": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "ServerProxyConfig",
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "sudoku_mask"
+          },
+          "password": {
+            "type": "string",
+            "default": ""
+          },
+          "ascii": {
+            "type": "string",
+            "default": ""
+          },
+          "custom_table": {
+            "type": "string",
+            "default": ""
+          },
+          "custom_tables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "padding_min": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0,
+            "default": 0
+          },
+          "padding_max": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0,
+            "default": 0
+          },
+          "protocol": {
+            "$ref": "#"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "protocol"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "wireguard"
+          },
+          "wireguard_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "private_key": {
+            "$ref": "#/$defs/WireguardKey"
+          },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "peers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/WireguardPeer"
+            }
+          },
+          "mtu": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535,
+            "default": 1408
+          },
+          "resource_limits": {
+            "$ref": "#/$defs/TunResourceLimits",
+            "default": {
+              "tcp_buffer_size": 32768,
+              "tcp_memory_bytes": null,
+              "max_tcp_connections": null,
+              "max_udp_sessions": null,
+              "max_udp_destinations": null,
+              "max_udp_destinations_per_session": null,
+              "max_udp_queued_bytes": null
+            }
+          },
+          "bind_interface": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "peer_client_chain": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ClientChain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "private_key",
+          "addresses",
+          "peers"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "xhttp"
+          },
+          "path": {
+            "type": "string",
+            "default": ""
+          },
+          "host": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "matching_headers": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/OneOrSome"
+            },
+            "default": {}
+          },
+          "mode": {
+            "$ref": "#/$defs/XhttpMode",
+            "default": "auto"
+          },
+          "http_version": {
+            "$ref": "#/$defs/XhttpVersion",
+            "default": "auto"
+          },
+          "x_padding_bytes": {
+            "$ref": "#/$defs/XhttpRange",
+            "default": 0
+          },
+          "sc_max_each_post_bytes": {
+            "$ref": "#/$defs/XhttpRange",
+            "default": 0
+          },
+          "sc_max_buffered_posts": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 0
+          },
+          "sc_stream_up_server_secs": {
+            "$ref": "#/$defs/XhttpRange",
+            "default": 0
+          },
+          "server_max_header_bytes": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 0
+          },
+          "no_sse_header": {
+            "type": "boolean",
+            "default": false
+          },
+          "limits": {
+            "$ref": "#/$defs/XhttpLimits",
+            "default": {
+              "max_sessions": null,
+              "max_pending_sessions": null,
+              "max_buffered_bytes": null,
+              "max_session_buffered_bytes": null,
+              "max_requests_per_connection": 250,
+              "max_requests_per_session": null,
+              "max_requests": null,
+              "h2_stream_window_bytes": 4194304,
+              "setup_timeout_secs": 60,
+              "packet_timeout_secs": 300,
+              "response_header_timeout_secs": 60
+            }
+          },
+          "protocol": {
+            "$ref": "#"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "protocol"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "http"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "socks"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "udp_enabled": {
+            "description": "Enable UDP functionality (UDP ASSOCIATE and UDP-over-TCP).\nWhen false (default), UDP ASSOCIATE returns \"command not supported\".",
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "shadowsocks"
+          },
+          "config": {
+            "$ref": "#/$defs/ShadowsocksConfig"
+          },
+          "udp_enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "type",
+          "config"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "snell"
+          },
+          "cipher": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "udp_enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "type",
+          "cipher",
+          "password"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "vless"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "decryption": {
+            "$ref": "#/$defs/VlessEncryptionSetting"
+          },
+          "encryption": {
+            "type": "null",
+            "writeOnly": true
+          },
+          "vision": {
+            "type": "boolean"
+          },
+          "encryption_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/VlessEncryptionLimits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "udp_enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "fallback": {
+            "description": "Fallback destination for failed authentication (optional)\nWhen set, failed auth attempts are proxied here instead of rejected",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NetLocation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "user_id"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "trojan"
+          },
+          "password": {
+            "type": "string"
+          },
+          "shadowsocks": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ShadowsocksConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "password"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tls"
+          },
+          "tls_targets": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/TlsServerRecord"
+            },
+            "default": {}
+          },
+          "default_tls_target": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TlsServerRecord"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shadowtls_targets": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/ShadowTlsServerRecord"
+            },
+            "default": {}
+          },
+          "reality_targets": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/RealityServerRecord"
+            },
+            "default": {}
+          },
+          "tls_buffer_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "vmess"
+          },
+          "cipher": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "udp_enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "type",
+          "cipher",
+          "user_id"
+        ]
+      },
+      {
+        "description": "AnyTLS inner protocol handler\nUsed as inner protocol within TLS/Reality/etc.",
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "anytls"
+          },
+          "users": {
+            "$ref": "#/$defs/OneOrSome2"
+          },
+          "padding_scheme": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "udp_enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "fallback": {
+            "description": "Fallback destination for failed authentication (optional)\nWhen set, failed auth attempts are proxied here instead of rejected",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NetLocation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "users"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "websocket"
+          },
+          "targets": {
+            "$ref": "#/$defs/OneOrSome3"
+          }
+        },
+        "required": [
+          "type",
+          "targets"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "portforward"
+          },
+          "targets": {
+            "$ref": "#/$defs/OneOrSome4"
+          }
+        },
+        "required": [
+          "type",
+          "targets"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "hysteria2"
+          },
+          "password": {
+            "type": "string"
+          },
+          "udp_enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "type",
+          "password"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tuicv5"
+          },
+          "uuid": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "zero_rtt_handshake": {
+            "description": "Enable 0-RTT (0.5-RTT for server) handshake for faster connection establishment.\nDefault is false for security - 0-RTT data is vulnerable to replay attacks.\nSee: https://blog.cloudflare.com/even-faster-connection-establishment-with-quic-0-rtt-resumption/",
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "type",
+          "uuid",
+          "password"
+        ]
+      },
+      {
+        "description": "Mixed HTTP+SOCKS5 server (auto-detects protocol from first byte)\nSimilar to mihomo's mixed-port feature.",
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mixed"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "udp_enabled": {
+            "description": "Enable UDP functionality for SOCKS5 (UDP ASSOCIATE and UDP-over-TCP)",
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "description": "NaiveProxy server (HTTP/2 CONNECT with padding)\nShould be used within TLS for proper camouflage",
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "naiveproxy"
+          },
+          "users": {
+            "description": "List of authorized users",
+            "$ref": "#/$defs/OneOrSome5"
+          },
+          "padding": {
+            "description": "Enable padding protocol (default: true)",
+            "type": "boolean",
+            "default": true
+          },
+          "fallback": {
+            "description": "Fallback for probe resistance (optional)\nCan be either a URL (http:// or https://) to reverse proxy, or an absolute path to serve files from",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NaiveFallbackConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "udp_enabled": {
+            "description": "Enable UDP-over-TCP (UoT) support (default: true)",
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "type",
+          "users"
+        ]
+      }
+    ],
+    "$defs": {
+      "WireguardKey": {},
+      "WireguardPeer": {
+        "type": "object",
+        "properties": {
+          "public_key": {
+            "$ref": "#/$defs/WireguardKey"
+          },
+          "pre_shared_key": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/WireguardKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endpoint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "allowed_ips": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "persistent_keepalive": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535,
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "public_key",
+          "allowed_ips"
+        ]
+      },
+      "TunResourceLimits": {
+        "type": "object",
+        "properties": {
+          "tcp_buffer_size": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 131072
+          },
+          "tcp_memory_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_tcp_connections": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_udp_sessions": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_udp_destinations": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_udp_destinations_per_session": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_udp_queued_bytes": {
+            "description": "Shared outbound payload allowance across session and destination queues.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          }
+        },
+        "additionalProperties": false
+      },
+      "ClientChain": {},
+      "OneOrSome": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "XhttpMode": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "packet-up",
+          "stream-up",
+          "stream-one"
+        ]
+      },
+      "XhttpVersion": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "h1",
+          "h2",
+          "h3"
+        ]
+      },
+      "XhttpRange": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "XhttpLimits": {
+        "type": "object",
+        "properties": {
+          "max_sessions": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_pending_sessions": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_buffered_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_session_buffered_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_requests_per_connection": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 250
+          },
+          "max_requests_per_session": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_requests": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "h2_stream_window_bytes": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 4194304
+          },
+          "h2_connection_window_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "setup_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 60
+          },
+          "packet_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 300
+          },
+          "response_header_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 60
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShadowsocksConfig": {},
+      "VlessEncryptionSetting": {
+        "description": "Exportable configuration credential, never included in diagnostic output.",
+        "type": "string"
+      },
+      "VlessEncryptionLimits": {
+        "type": "object",
+        "properties": {
+          "max_sessions": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 4096
+          },
+          "max_replays": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 262144
+          },
+          "max_replays_per_session": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 65536
+          }
+        },
+        "additionalProperties": false
+      },
+      "NetLocation": {},
+      "TlsServerRecord": {
+        "type": "object",
+        "properties": {
+          "certificate_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "key_exchange_groups": {
+            "$ref": "#/$defs/TlsKeyExchangeGroups"
+          },
+          "cert": {
+            "type": "string",
+            "default": ""
+          },
+          "key": {
+            "type": "string",
+            "default": ""
+          },
+          "alpn_protocols": {
+            "$ref": "#/$defs/NoneOrSome",
+            "default": null
+          },
+          "client_ca_certs": {
+            "$ref": "#/$defs/NoneOrSome",
+            "default": null
+          },
+          "client_fingerprints": {
+            "$ref": "#/$defs/NoneOrSome",
+            "default": null
+          },
+          "vision": {
+            "description": "Enable XTLS-Vision protocol for TLS-in-TLS optimization.\nWhen enabled, the inner protocol MUST be VLESS.\nVision detects TLS-in-TLS scenarios and switches to Direct mode for zero-copy performance.\nRequires TLS 1.3.",
+            "type": "boolean",
+            "default": false
+          },
+          "protocol": {
+            "$ref": "#"
+          },
+          "override_rules": {
+            "$ref": "#/$defs/NoneOrSome2"
+          }
+        },
+        "required": [
+          "protocol"
+        ]
+      },
+      "TlsKeyExchangeGroups": {},
+      "NoneOrSome": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "NoneOrSome2": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/ConfigSelection"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ConfigSelection"
+            }
+          }
+        ]
+      },
+      "ConfigSelection": {},
+      "ShadowTlsServerRecord": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "handshake": {
+            "$ref": "#/$defs/ShadowTlsServerHandshakeConfig"
+          },
+          "protocol": {
+            "$ref": "#"
+          },
+          "override_rules": {
+            "$ref": "#/$defs/NoneOrSome2"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "password",
+          "handshake",
+          "protocol"
+        ]
+      },
+      "ShadowTlsServerHandshakeConfig": {},
+      "RealityServerRecord": {
+        "type": "object",
+        "properties": {
+          "mldsa65_seed": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "private_key": {
+            "description": "X25519 private key (32 bytes, base64url encoded)",
+            "type": "string"
+          },
+          "short_ids": {
+            "description": "List of valid short IDs (hex strings, 0-16 chars each)",
+            "$ref": "#/$defs/OneOrSome",
+            "default": "0000000000000000"
+          },
+          "dest": {
+            "description": "Fallback destination (e.g., \"example.com:443\")",
+            "$ref": "#/$defs/NetLocation"
+          },
+          "max_time_diff": {
+            "description": "Maximum timestamp difference in milliseconds (optional)",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0,
+            "default": 60000
+          },
+          "min_client_version": {
+            "description": "Minimum client version [major, minor, patch] (optional)",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "default": null
+          },
+          "max_client_version": {
+            "description": "Maximum client version [major, minor, patch] (optional)",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "default": null
+          },
+          "cipher_suites": {
+            "description": "TLS 1.3 cipher suites to support (optional)\nValid values: \"TLS_AES_128_GCM_SHA256\", \"TLS_AES_256_GCM_SHA384\", \"TLS_CHACHA20_POLY1305_SHA256\"\nIf empty or not specified, the default set is used.",
+            "$ref": "#/$defs/NoneOrSome3",
+            "default": null
+          },
+          "vision": {
+            "description": "Enable XTLS-Vision protocol for TLS-in-TLS optimization.\nWhen enabled, the inner protocol MUST be VLESS.\nVision detects TLS-in-TLS scenarios and switches to Direct mode for zero-copy performance.\nReality provides censorship resistance while Vision provides performance optimization.",
+            "type": "boolean",
+            "default": false
+          },
+          "protocol": {
+            "description": "Inner protocol (VLESS, Trojan, etc.)",
+            "$ref": "#"
+          },
+          "dest_client_chain": {
+            "description": "Client chain for connecting to dest server (for fallback connections).\nIf not specified, connects directly to dest.",
+            "$ref": "#/$defs/NoneOrSome4"
+          },
+          "override_rules": {
+            "description": "Override rules",
+            "$ref": "#/$defs/NoneOrSome2"
+          }
+        },
+        "required": [
+          "private_key",
+          "dest",
+          "protocol"
+        ]
+      },
+      "NoneOrSome3": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/CipherSuite"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/CipherSuite"
+            }
+          }
+        ]
+      },
+      "CipherSuite": {},
+      "NoneOrSome4": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/ClientChainHop"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ClientChainHop"
+            }
+          }
+        ]
+      },
+      "ClientChainHop": {},
+      "OneOrSome2": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/AnyTlsUserConfig"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/AnyTlsUserConfig"
+            }
+          }
+        ]
+      },
+      "AnyTlsUserConfig": {
+        "description": "AnyTLS user configuration",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "password"
+        ]
+      },
+      "OneOrSome3": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/WebsocketServerRecord"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/WebsocketServerRecord"
+            }
+          }
+        ]
+      },
+      "WebsocketServerRecord": {
+        "type": "object",
+        "properties": {
+          "matching_path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "matching_headers": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null
+          },
+          "max_early_data": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "early_data_header_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "protocol": {
+            "$ref": "#"
+          },
+          "ping_type": {
+            "$ref": "#/$defs/WebsocketPingType",
+            "default": "pingframe"
+          },
+          "override_rules": {
+            "$ref": "#/$defs/NoneOrSome2"
+          }
+        },
+        "required": [
+          "protocol"
+        ]
+      },
+      "WebsocketPingType": {
+        "type": "string",
+        "enum": [
+          "disabled",
+          "pingframe",
+          "emptyframe"
+        ]
+      },
+      "OneOrSome4": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/NetLocation"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/NetLocation"
+            }
+          }
+        ]
+      },
+      "OneOrSome5": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/NaiveUserConfig"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/NaiveUserConfig"
+            }
+          }
+        ]
+      },
+      "NaiveUserConfig": {
+        "description": "NaiveProxy user configuration",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "NaiveFallbackConfig": {}
+    }
+  },
+  "client_protocols": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "ClientProxyConfig",
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "sudoku_mask"
+          },
+          "password": {
+            "type": "string",
+            "default": ""
+          },
+          "ascii": {
+            "type": "string",
+            "default": ""
+          },
+          "custom_table": {
+            "type": "string",
+            "default": ""
+          },
+          "custom_tables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "padding_min": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0,
+            "default": 0
+          },
+          "padding_max": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0,
+            "default": 0
+          },
+          "protocol": {
+            "$ref": "#"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "protocol"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "direct"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "wireguard"
+          },
+          "private_key": {
+            "$ref": "#/$defs/WireguardKey"
+          },
+          "public_key": {
+            "$ref": "#/$defs/WireguardKey"
+          },
+          "pre_shared_key": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/WireguardKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowed_ips": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          },
+          "persistent_keepalive": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535,
+            "default": 0
+          },
+          "mtu": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535,
+            "default": 1408
+          },
+          "resource_limits": {
+            "$ref": "#/$defs/TunResourceLimits",
+            "default": {
+              "tcp_buffer_size": 32768,
+              "tcp_memory_bytes": null,
+              "max_tcp_connections": null,
+              "max_udp_sessions": null,
+              "max_udp_destinations": null,
+              "max_udp_destinations_per_session": null,
+              "max_udp_queued_bytes": null
+            }
+          },
+          "peer_client_chain": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ClientChain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "private_key",
+          "public_key",
+          "addresses"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "hysteria2"
+          },
+          "password": {
+            "type": "string"
+          },
+          "obfs": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Obfuscation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hopping": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/HoppingConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "udp_enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "password"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tuic"
+          },
+          "uuid": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "udp_relay_mode": {
+            "$ref": "#/$defs/TuicUdpMode",
+            "default": "native"
+          },
+          "heartbeat_interval_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 10
+          },
+          "udp_enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "uuid",
+          "password"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "http"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolve_hostname": {
+            "description": "When true, resolve hostnames to IP addresses before passing to HTTP CONNECT.\nUsed when the upstream proxy blocks by hostname.",
+            "type": "boolean"
+          },
+          "http_version": {
+            "$ref": "#/$defs/HttpVersion",
+            "default": "h1"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "socks"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "shadowsocks"
+          },
+          "config": {
+            "$ref": "#/$defs/ShadowsocksConfig"
+          },
+          "udp_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "config",
+          "udp_enabled"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "snell"
+          },
+          "config": {
+            "$ref": "#/$defs/ShadowsocksConfig"
+          },
+          "udp_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "config",
+          "udp_enabled"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "vless"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "encryption": {
+            "$ref": "#/$defs/VlessEncryptionSetting"
+          },
+          "decryption": {
+            "type": "null",
+            "writeOnly": true
+          },
+          "vision": {
+            "type": "boolean"
+          },
+          "udp_enabled": {
+            "type": "boolean"
+          },
+          "h2mux": {
+            "description": "H2MUX multiplexing configuration",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/H2MuxConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "user_id"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "trojan"
+          },
+          "password": {
+            "type": "string"
+          },
+          "shadowsocks": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ShadowsocksConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "h2mux": {
+            "description": "H2MUX multiplexing configuration",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/H2MuxConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "password"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "reality"
+          },
+          "mldsa65_verify": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "public_key": {
+            "type": "string"
+          },
+          "short_id": {
+            "type": "string",
+            "default": "0000000000000000"
+          },
+          "sni_hostname": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cipher_suites": {
+            "description": "TLS 1.3 cipher suites to use (optional)\nValid values: \"TLS_AES_128_GCM_SHA256\", \"TLS_AES_256_GCM_SHA384\", \"TLS_CHACHA20_POLY1305_SHA256\"\nIf empty or not specified, all three cipher suites are offered.",
+            "$ref": "#/$defs/NoneOrSome"
+          },
+          "vision": {
+            "description": "Enable XTLS-Vision protocol for TLS-in-TLS optimization.\nWhen enabled, the inner protocol MUST be VLESS.",
+            "type": "boolean"
+          },
+          "protocol": {
+            "$ref": "#"
+          }
+        },
+        "required": [
+          "type",
+          "public_key",
+          "protocol"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "shadowtls"
+          },
+          "password": {
+            "description": "ShadowTLS password for authentication",
+            "type": "string"
+          },
+          "sni_hostname": {
+            "description": "Optional SNI hostname override",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "protocol": {
+            "description": "Inner protocol (typically VLESS, Trojan, etc.)",
+            "$ref": "#"
+          }
+        },
+        "required": [
+          "type",
+          "password",
+          "protocol"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tls"
+          }
+        },
+        "$ref": "#/$defs/TlsClientRecord",
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "vmess"
+          },
+          "cipher": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "udp_enabled": {
+            "type": "boolean"
+          },
+          "h2mux": {
+            "description": "H2MUX multiplexing configuration",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/H2MuxConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "cipher",
+          "user_id"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "websocket"
+          }
+        },
+        "$ref": "#/$defs/WebsocketClientRecord",
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "xhttp"
+          },
+          "path": {
+            "type": "string",
+            "default": ""
+          },
+          "host": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "mode": {
+            "$ref": "#/$defs/XhttpMode",
+            "default": "auto"
+          },
+          "http_version": {
+            "$ref": "#/$defs/XhttpVersion",
+            "default": "auto"
+          },
+          "x_padding_bytes": {
+            "$ref": "#/$defs/XhttpRange",
+            "default": 0
+          },
+          "sc_max_each_post_bytes": {
+            "$ref": "#/$defs/XhttpRange",
+            "default": 0
+          },
+          "sc_min_posts_interval_ms": {
+            "$ref": "#/$defs/XhttpRange",
+            "default": 0
+          },
+          "no_grpc_header": {
+            "type": "boolean",
+            "default": false
+          },
+          "download_idle_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 900
+          },
+          "packet_pipeline_depth": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 30
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {}
+          },
+          "limits": {
+            "$ref": "#/$defs/XhttpLimits",
+            "default": {
+              "max_sessions": null,
+              "max_pending_sessions": null,
+              "max_buffered_bytes": null,
+              "max_session_buffered_bytes": null,
+              "max_requests_per_connection": 250,
+              "max_requests_per_session": null,
+              "max_requests": null,
+              "h2_stream_window_bytes": 4194304,
+              "setup_timeout_secs": 60,
+              "packet_timeout_secs": 300,
+              "response_header_timeout_secs": 60
+            }
+          },
+          "pool": {
+            "$ref": "#/$defs/XhttpPool",
+            "default": {
+              "max_connections": 3,
+              "max_h1_connections": 64,
+              "idle_timeout_secs": 60,
+              "h2_receive_admission": false
+            }
+          },
+          "protocol": {
+            "$ref": "#"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "protocol"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "portforward"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "description": "AnyTLS outbound protocol",
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "anytls"
+          },
+          "password": {
+            "description": "Authentication password",
+            "type": "string"
+          },
+          "udp_enabled": {
+            "description": "UDP over TCP support (default: true)",
+            "type": "boolean"
+          },
+          "padding_scheme": {
+            "description": "Custom padding scheme (optional, uses default if not specified)\nEach line is a key=value pair like \"stop=8\" or \"0=30-30\"",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "idle_session_check_interval_secs": {
+            "description": "Values <= 5 use the reference default of 30 seconds.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0,
+            "default": 30
+          },
+          "idle_session_timeout_secs": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0,
+            "default": 30
+          },
+          "min_idle_session": {
+            "description": "Retention floor, not proactive dialing or a connection limit.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 0
+          },
+          "disable_reuse": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "password"
+        ]
+      },
+      {
+        "description": "NaiveProxy client protocol (HTTP/2 CONNECT with padding)",
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "naiveproxy"
+          },
+          "username": {
+            "description": "Username for Basic Auth",
+            "type": "string"
+          },
+          "password": {
+            "description": "Password for Basic Auth",
+            "type": "string"
+          },
+          "padding": {
+            "description": "Enable padding protocol (default: true)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "username",
+          "password"
+        ]
+      }
+    ],
+    "$defs": {
+      "WireguardKey": {},
+      "TunResourceLimits": {
+        "type": "object",
+        "properties": {
+          "tcp_buffer_size": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 131072
+          },
+          "tcp_memory_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_tcp_connections": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_udp_sessions": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_udp_destinations": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_udp_destinations_per_session": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_udp_queued_bytes": {
+            "description": "Shared outbound payload allowance across session and destination queues.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          }
+        },
+        "additionalProperties": false
+      },
+      "ClientChain": {},
+      "Obfuscation": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "salamander"
+              },
+              "password": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "password"
+            ]
+          }
+        ]
+      },
+      "HoppingConfig": {
+        "type": "object",
+        "properties": {
+          "ports": {
+            "type": "string"
+          },
+          "interval_secs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0
+          },
+          "min_interval_secs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0
+          },
+          "max_interval_secs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ports"
+        ]
+      },
+      "TuicUdpMode": {
+        "type": "string",
+        "enum": [
+          "native",
+          "quic"
+        ]
+      },
+      "HttpVersion": {
+        "type": "string",
+        "enum": [
+          "h1",
+          "h2"
+        ]
+      },
+      "ShadowsocksConfig": {},
+      "VlessEncryptionSetting": {
+        "description": "Exportable configuration credential, never included in diagnostic output.",
+        "type": "string"
+      },
+      "H2MuxConfig": {
+        "description": "Configuration for h2mux (HTTP/2 multiplexing) on protocols that support it.\n\nH2MUX multiplexes multiple proxy streams over a single HTTP/2 connection,\nreducing connection overhead and improving performance for many concurrent streams.",
+        "type": "object",
+        "properties": {
+          "max_connections": {
+            "description": "Maximum number of connections to maintain",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "min_streams": {
+            "description": "Minimum number of streams before opening a new connection",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "max_streams": {
+            "description": "Maximum number of streams per connection (0 = unlimited)",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "padding": {
+            "description": "Enable padding for traffic obfuscation",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NoneOrSome": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/CipherSuite"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/CipherSuite"
+            }
+          }
+        ]
+      },
+      "CipherSuite": {},
+      "TlsClientRecord": {},
+      "WebsocketPingType": {
+        "type": "string",
+        "enum": [
+          "disabled",
+          "pingframe",
+          "emptyframe"
+        ]
+      },
+      "WebsocketClientRecord": {
+        "type": "object",
+        "properties": {
+          "matching_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matching_headers": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "max_early_data": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "early_data_header_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ping_type": {
+            "$ref": "#/$defs/WebsocketPingType"
+          },
+          "protocol": {
+            "$ref": "#"
+          }
+        },
+        "required": [
+          "protocol"
+        ]
+      },
+      "XhttpMode": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "packet-up",
+          "stream-up",
+          "stream-one"
+        ]
+      },
+      "XhttpVersion": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "h1",
+          "h2",
+          "h3"
+        ]
+      },
+      "XhttpRange": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "XhttpLimits": {
+        "type": "object",
+        "properties": {
+          "max_sessions": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_pending_sessions": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_buffered_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_session_buffered_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_requests_per_connection": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 250
+          },
+          "max_requests_per_session": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "max_requests": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0,
+            "default": null
+          },
+          "h2_stream_window_bytes": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 4194304
+          },
+          "h2_connection_window_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "setup_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 60
+          },
+          "packet_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 300
+          },
+          "response_header_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 60
+          }
+        },
+        "additionalProperties": false
+      },
+      "XhttpPool": {
+        "type": "object",
+        "properties": {
+          "max_connections": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 3
+          },
+          "max_h1_connections": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 64
+          },
+          "idle_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 60
+          },
+          "h2_receive_admission": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "transport": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Transport",
+    "type": "string",
+    "enum": [
+      "tcp",
+      "quic",
+      "udp",
+      "kcp"
+    ]
+  },
+  "kcp_settings": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "KcpSettings",
+    "description": "Validated KCP settings shared by client and server configurations.",
+    "type": "object",
+    "properties": {
+      "mode": {
+        "$ref": "#/$defs/KcpMode",
+        "default": "normal"
+      },
+      "send_window": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "format": "uint32",
+        "minimum": 0
+      },
+      "recv_window": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "format": "uint32",
+        "minimum": 0
+      },
+      "mtu": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "format": "uint32",
+        "minimum": 0
+      },
+      "max_sessions": {
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0,
+        "default": 1024
+      }
+    },
+    "additionalProperties": false,
+    "$defs": {
+      "KcpMode": {
+        "description": "KCP performance mode presets.",
+        "type": "string",
+        "enum": [
+          "normal",
+          "fast",
+          "turbo",
+          "gaming",
+          "file_transfer"
+        ]
+      }
+    }
+  },
+  "rules": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "RuleRecord"
+  },
+  "dns": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "DnsConfigGroup",
+    "description": "DNS group configuration.",
+    "type": "object",
+    "properties": {
+      "dns_group": {
+        "type": "string"
+      },
+      "hosts": {
+        "$ref": "#/$defs/StaticHosts"
+      },
+      "fake_ip": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/FakeIpConfig"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "dns_servers": {
+        "$ref": "#/$defs/NoneOrSome"
+      }
+    },
+    "additionalProperties": false,
+    "required": [
+      "dns_group",
+      "dns_servers"
+    ],
+    "$defs": {
+      "StaticHosts": {},
+      "FakeIpConfig": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "$ref": "#/$defs/FakeIpOptions"
+          }
+        ]
+      },
+      "FakeIpOptions": {
+        "type": "object",
+        "properties": {
+          "ipv4_range": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": "198.18.0.0/15"
+          },
+          "ipv6_range": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "max_entries": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0,
+            "default": 65536
+          },
+          "bypass_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "missing_family": {
+            "$ref": "#/$defs/MissingFamily",
+            "default": "forward"
+          },
+          "https_records": {
+            "$ref": "#/$defs/HttpsRecords",
+            "default": "forward"
+          },
+          "state_file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          }
+        },
+        "additionalProperties": false
+      },
+      "MissingFamily": {
+        "type": "string",
+        "enum": [
+          "forward",
+          "nodata"
+        ]
+      },
+      "HttpsRecords": {
+        "type": "string",
+        "enum": [
+          "forward",
+          "suppress"
+        ]
+      },
+      "NoneOrSome": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/DnsServerSpec"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/DnsServerSpec"
+            }
+          }
+        ]
+      },
+      "DnsServerSpec": {
+        "description": "A DNS server specification in config.",
+        "anyOf": [
+          {
+            "description": "Simple URL string: \"system\", \"udp://8.8.8.8\", etc.\nMust be IP-based (no hostnames). Cannot have bootstrap_url.",
+            "type": "string"
+          },
+          {
+            "description": "Object with URL and optional client_chain, bootstrap_url, server_name, ip_strategy.",
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "client_chain": {
+                "$ref": "#/$defs/NoneOrSome2",
+                "default": null
+              },
+              "bootstrap_url": {
+                "description": "Bootstrap resolver for hostname resolution.\nCan be a URL string (e.g., \"udp://8.8.8.8\") or a dns_group name.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "default": null
+              },
+              "server_name": {
+                "description": "SNI server name override for TLS/HTTPS. Defaults to hostname from URL.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "default": null
+              },
+              "ip_strategy": {
+                "description": "IP lookup strategy for DNS resolution. Defaults to ipv4_then_ipv6.",
+                "$ref": "#/$defs/IpStrategy",
+                "default": "ipv4_then_ipv6"
+              },
+              "timeout_secs": {
+                "description": "Timeout for DNS resolution in seconds. Defaults to 5. Set to 0 to disable.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0,
+                "default": 5
+              },
+              "connect_timeout_secs": {
+                "description": "Timeout for establishing connections to DNS upstreams in seconds.\nDefaults to 5. Separate from timeout_secs which covers the full request.\nFor plain `tcp://` upstreams, hickory also passes the request timeout\ninto `connect_tcp`, so the runtime uses the shorter of that value and\nthis connect timeout.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0,
+                "default": 5
+              },
+              "attempts": {
+                "description": "Number of retry attempts for failed queries. Defaults to 1.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0,
+                "default": 1
+              },
+              "native_cache_secs": {
+                "description": "Fixed OS/NSS lookup memoization window. System only; omitted or 0 disables it.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "url"
+            ]
+          }
+        ]
+      },
+      "NoneOrSome2": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/ClientChain"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ClientChain"
+            }
+          }
+        ]
+      },
+      "ClientChain": {},
+      "IpStrategy": {
+        "description": "IP lookup strategy for DNS resolution.",
+        "oneOf": [
+          {
+            "description": "Only query A records (IPv4).",
+            "type": "string",
+            "const": "ipv4_only"
+          },
+          {
+            "description": "Only query AAAA records (IPv6).",
+            "type": "string",
+            "const": "ipv6_only"
+          },
+          {
+            "description": "Query A and AAAA in parallel.",
+            "type": "string",
+            "const": "ipv4_and_ipv6"
+          },
+          {
+            "description": "Query A first, fall back to AAAA (default).",
+            "type": "string",
+            "const": "ipv4_then_ipv6"
+          },
+          {
+            "description": "Query AAAA first, fall back to A.",
+            "type": "string",
+            "const": "ipv6_then_ipv4"
+          }
+        ]
+      }
+    }
+  }
+}

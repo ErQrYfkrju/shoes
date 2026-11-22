@@ -212,6 +212,18 @@ async fn validation_does_not_bind_or_start_service() {
 }
 
 #[tokio::test]
+async fn bare_socks_server_entry_without_rules_is_valid() {
+    let yaml = r#"
+- address: "127.0.0.1:19090"
+  transport: kcp
+  protocol:
+    type: socks
+"#;
+    let report = validate_config(yaml, ValidationMode::Proxy).await;
+    assert!(report.valid, "{report:?}");
+}
+
+#[tokio::test]
 async fn validation_report_does_not_leak_secret_scalars() {
     let yaml = format!(
         r#"

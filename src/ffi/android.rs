@@ -165,6 +165,22 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_setLogFile<'local>(
     setup_log_file(&path_str)
 }
 
+/// Return the versioned configuration schema document (see ADR-0004).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_shoesproxy_ShoesNative_configSchema<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+) -> JString<'local> {
+    let schema = super::config_schema::config_schema();
+    match serde_json::to_string(&schema) {
+        Ok(json) => match unowned.with_env(|env| env.new_string(json)).into_outcome() {
+            Outcome::Ok(value) => value,
+            _ => JString::null(),
+        },
+        Err(_) => JString::null(),
+    }
+}
+
 /// Validate a YAML configuration without starting listeners, TUN, or upstream connections.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_shoesproxy_ShoesNative_validateConfig<'local>(
@@ -178,7 +194,9 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_validateConfig<'local>(
     }
     let extracted = unowned
         .with_env(|env| -> jni::errors::Result<(String, String)> {
-            let config = env.get_string(&config_yaml).map(|value| value.to_string())?;
+            let config = env
+                .get_string(&config_yaml)
+                .map(|value| value.to_string())?;
             let mode = env
                 .get_string(&validation_mode)
                 .map(|value| value.to_string())?;
