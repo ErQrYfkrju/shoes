@@ -165,6 +165,78 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_setLogFile<'local>(
     setup_log_file(&path_str)
 }
 
+/// Validate a YAML configuration without starting listeners, TUN, or upstream connections.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_shoesproxy_ShoesNative_validateConfig<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    config_yaml: JString<'local>,
+    validation_mode: JString<'local>,
+) -> JString<'local> {
+    if !common::is_lifecycle_thread() {
+        return JString::null();
+    }
+    let extracted = unowned
+        .with_env(|env| -> jni::errors::Result<(String, String)> {
+            let config = env.get_string(&config_yaml).map(|value| value.to_string())?;
+            let mode = env
+                .get_string(&validation_mode)
+                .map(|value| value.to_string())?;
+            Ok((config, mode))
+        })
+        .into_outcome();
+    let (config, mode) = match extracted {
+        Outcome::Ok(values) => values,
+        Outcome::Err(error) => {
+            error!("Failed to extract validation input: {error}");
+            return JString::null();
+        }
+        Outcome::Panic(_) => return JString::null(),
+    };
+
+    let mode = match mode.as_str() {
+        "proxy" => super::config_validation::ValidationMode::Proxy,
+        "vpn" => super::config_validation::ValidationMode::Vpn,
+        _ => {
+            let report = super::config_validation::ValidationReport::from_diagnostics(vec![
+                super::config_validation::ValidationDiagnostic::new(
+                    super::config_validation::DiagnosticCode::ModeIncompatible,
+                    "Unsupported validation mode",
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+            ]);
+            return match serde_json::to_string(&report) {
+                Ok(json) => match unowned.with_env(|env| env.new_string(json)).into_outcome() {
+                    Outcome::Ok(value) => value,
+                    _ => JString::null(),
+                },
+                Err(_) => JString::null(),
+            };
+        }
+    };
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            error!("Failed to create validation runtime: {error}");
+            return JString::null();
+        }
+    };
+    let report = runtime.block_on(super::config_validation::validate_config(&config, mode));
+    match serde_json::to_string(&report) {
+        Ok(json) => match unowned.with_env(|env| env.new_string(json)).into_outcome() {
+            Outcome::Ok(value) => value,
+            _ => JString::null(),
+        },
+        Err(_) => JString::null(),
+    }
+}
+
 /// Start the shoes service.
 ///
 /// # Arguments

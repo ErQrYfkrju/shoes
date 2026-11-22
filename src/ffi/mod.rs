@@ -33,6 +33,12 @@
 #[cfg_attr(not(any(target_os = "android", target_os = "ios")), allow(dead_code))]
 mod common;
 
+#[cfg(any(target_os = "android", target_os = "ios", feature = "ffi"))]
+mod config_validation;
+
+#[cfg(all(test, feature = "ffi"))]
+mod config_validation_tests;
+
 #[cfg(target_os = "android")]
 mod android;
 

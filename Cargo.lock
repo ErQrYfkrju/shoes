@@ -3120,6 +3120,7 @@ dependencies = [
  "ruzstd",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "serde_yaml",
  "shake",
  "shoes-test-support",

@@ -327,7 +327,9 @@ pub async fn start_proxy_from_config(
     Ok(())
 }
 
-async fn compile_ffi_config(config_yaml: &str) -> std::io::Result<crate::config::ValidatedConfigs> {
+pub(super) async fn compile_ffi_config(
+    config_yaml: &str,
+) -> std::io::Result<crate::config::ValidatedConfigs> {
     let config_yaml = config_yaml.to_owned();
     let mut configs: Vec<Config> =
         tokio::task::spawn_blocking(move || load_config_str(&config_yaml))
