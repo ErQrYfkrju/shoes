@@ -13,127 +13,324 @@ pub fn config_schema() -> Value {
         serde_json::from_str(SNAPSHOT).expect("committed schema artifact must parse");
     mark_secrets(&mut components);
     root.insert("components".into(), components);
-    root.insert("mode_skeletons".into(), mode_skeletons());
+    root.insert("profile_skeleton".into(), profile_skeleton());
+    root.insert("dns_variants".into(), dns_variants());
+    root.insert("dns_group_template".into(), dns_group_template());
     root.insert("presets".into(), presets());
+    root.insert(
+        "credential_kinds".into(),
+        serde_json::json!(["reality_keypair", "vless_user_id", "shadowsocks_2022_password", "vless_encryption"]),
+    );
+    root.insert("server_pair_templates".into(), server_pair_templates());
     Value::Object(root)
 }
 
-/// Per-mode editing skeletons (ADR-0005): declarative field lists the Kotlin
-/// renderer consumes as data. `component` references a snapshot component;
-/// `visible_when` is a declarative sibling condition; `defaults` are the
-/// documentation-recommended initial values.
-fn mode_skeletons() -> Value {
-    let kcp_field = |prefix: &str| {
-        serde_json::json!({
-            "key": format!("{prefix}kcp_settings"),
-            "component": "kcp_settings",
-            "visible_when": { "sibling": "transport", "equals": "kcp" },
-            "defaults": {
-                "mode": "file_transfer",
-                "send_window": 256,
-                "recv_window": 256,
-                "mtu": 1400,
-                "max_sessions": 128
-            },
-        })
-    };
+/// KCP documentation-recommended initial values shared by the skeleton field
+/// and the KCP presets (see `examples/kcp.yaml`).
+fn kcp_defaults() -> Value {
     serde_json::json!({
-        "proxy": {
-            "fields": [
-                { "key": "address", "kind": "text", "required": true },
-                { "key": "protocol", "component": "server_protocols" },
-                { "key": "transport", "enum": ["tcp", "quic", "kcp"], "default": "tcp" },
-                kcp_field(""),
-            ]
-        },
-        "vpn": {
-            "fields": [
-                { "key": "device_fd", "kind": "integer", "required": true, "default": -1 },
-                { "key": "mtu", "kind": "integer", "default": 9000 },
-                { "key": "rules.0.masks", "kind": "text", "default": "0.0.0.0/0" },
-                { "key": "rules.0.action", "enum": ["allow"], "default": "allow" },
-                { "key": "rules.0.client_chain.address", "kind": "text", "required": true },
-                { "key": "rules.0.client_chain.protocol", "component": "client_protocols" },
-                { "key": "rules.0.client_chain.transport", "enum": ["tcp", "quic", "kcp"], "default": "kcp" },
-                kcp_field("rules.0.client_chain."),
-            ]
-        }
+        "mode": "file_transfer",
+        "send_window": 256,
+        "recv_window": 256,
+        "mtu": 1400,
+        "max_sessions": 128
     })
 }
 
-/// Documentation-sourced preset catalog (ADR-0005). Templates are trimmed
-/// copies of upstream `examples/` files; the Kotlin side renders them as
-/// data and contains no preset content. No secret-marked keys allowed —
-/// asserted by tests.
-fn presets() -> Value {
-    const QUICKSTART: &str = "- address: \"127.0.0.1:1080\"\n  protocol:\n    type: socks\n";
-    const KCP_CHAIN: &str = concat!(
-        "        transport: kcp\n",
-        "        kcp_settings:\n",
-        "          mode: file_transfer\n",
-        "          send_window: 256\n",
-        "          recv_window: 256\n",
-        "          mtu: 1400\n",
-        "          max_sessions: 128\n",
-        "        protocol:\n          type: socks\n",
-    );
-    let kcp_proxy = format!(
-        concat!(
-            "- address: \"127.0.0.1:1080\"\n",
-            "  protocol:\n    type: socks\n",
-            "  rules:\n",
-            "    - masks: \"0.0.0.0/0\"\n",
-            "      action: allow\n",
-            "      client_chain:\n",
-            "        address: \"server.example.com:19090\"\n{}"
-        ),
-        KCP_CHAIN
-    );
-    let kcp_vpn = format!(
-        concat!(
-            "- device_fd: -1\n",
-            "  mtu: 9000\n",
-            "  tcp_enabled: true\n",
-            "  udp_enabled: true\n",
-            "  rules:\n",
-            "    - masks: \"0.0.0.0/0\"\n",
-            "      action: allow\n",
-            "      client_chain:\n",
-            "        address: \"server.example.com:19090\"\n{}"
-        ),
-        KCP_CHAIN
-    );
-    let mixed = "- address: \"127.0.0.1:7890\"\n  protocol:\n    type: mixed\n";
+/// Simple-form field list (ADR-0005): one connection profile, mode-agnostic —
+/// the operating mode lives in main settings and only affects the wrapping
+/// assembled at service start. `component` references a snapshot component;
+/// `visible_when` is a declarative sibling condition; `defaults` are the
+/// documentation-recommended initial values.
+fn profile_skeleton() -> Value {
+    serde_json::json!({
+        "fields": [
+            { "key": "address", "kind": "text", "required": true },
+            { "key": "protocol", "component": "client_protocols" },
+            { "key": "transport", "enum": ["tcp", "quic", "kcp"], "default": "tcp" },
+            {
+                "key": "kcp_settings",
+                "component": "kcp_settings",
+                "visible_when": { "sibling": "transport", "equals": "kcp" },
+                "defaults": kcp_defaults(),
+            },
+            { "key": "dns", "enum": dns_variant_ids(), "default": "via_server_1.1.1.1" },
+            {
+                "key": "dns_custom_url",
+                "kind": "text",
+                "visible_when": { "sibling": "dns", "equals": "custom" },
+            },
+        ]
+    })
+}
+
+/// The single DNS choice of the simple form (design: DNS as one choice).
+/// `via_profile` variants route the upstream through the profile's
+/// client_chain using `dns_group_template`; `custom` carries a user URL.
+fn dns_variants() -> Value {
     serde_json::json!([
         {
-            "name": "quickstart_socks",
-            "title": "Локальный SOCKS",
-            "description": "SOCKS5-слушатель на 127.0.0.1:1080 без внешнего сервера",
-            "mode": "proxy",
-            "yaml": QUICKSTART,
+            "id": "via_server_1.1.1.1",
+            "title": "Через сервер (DoT 1.1.1.1)",
+            "upstream": "tls://1.1.1.1",
+            "server_name": "cloudflare-dns.com",
+            "via_profile": true
         },
         {
-            "name": "kcp_proxy_client",
-            "title": "Через сервер (KCP), режим Proxy",
-            "description": "Локальный SOCKS + правило на удалённый сервер через KCP",
-            "mode": "proxy",
-            "yaml": kcp_proxy,
+            "id": "via_server_8.8.8.8",
+            "title": "Через сервер (DoT 8.8.8.8)",
+            "upstream": "tls://8.8.8.8",
+            "server_name": "dns.google",
+            "via_profile": true
         },
-        {
-            "name": "kcp_vpn_client",
-            "title": "Через сервер (KCP), режим VPN",
-            "description": "TUN-режим: весь трафик через удалённый сервер по KCP",
-            "mode": "vpn",
-            "yaml": kcp_vpn,
-        },
-        {
-            "name": "mixed_no_auth",
-            "title": "Локальный Mixed",
-            "description": "HTTP+SOCKS5 автоопределение на 127.0.0.1:7890",
-            "mode": "proxy",
-            "yaml": mixed,
-        },
+        { "id": "system", "title": "Системный DNS" },
+        { "id": "custom", "title": "Свой DNS (URL)", "custom": true }
     ])
+}
+
+fn dns_variant_ids() -> Value {
+    dns_variants()
+        .as_array()
+        .expect("dns variants are an array")
+        .iter()
+        .map(|variant| variant["id"].clone())
+        .collect::<Vec<_>>()
+        .into()
+}
+
+/// DNS-group template for "via server" variants (shape from
+/// `examples/dns_tuning.yaml`): the upstream is an IP-based DoT resolver
+/// routed through the profile. `{{UPSTREAM}}`/`{{SERVER_NAME}}` come from the
+/// chosen dns variant; `{{PROFILE_CHAIN}}` is replaced by the profile's
+/// inline client_chain (or a client_group reference wrapping it).
+fn dns_group_template() -> Value {
+    serde_json::json!({
+        "dns_group": "via-profile",
+        "dns_servers": [
+            {
+                "url": "{{UPSTREAM}}",
+                "server_name": "{{SERVER_NAME}}",
+                "client_chain": "{{PROFILE_CHAIN}}"
+            }
+        ]
+    })
+}
+
+/// Documentation-sourced preset catalog (ADR-0005). Profile presets carry a
+/// client_chain-shaped fragment the assembler wraps per mode; service presets
+/// (`scope: "service"` + `modes: ["proxy"]`) are complete local listeners.
+/// Secret fields carry only `{{TOKEN}}` placeholders filled by
+/// `generate_credentials` — no real key material lives here, asserted by tests.
+fn presets() -> Value {
+    let kcp_settings = concat!(
+        "kcp_settings:\n",
+        "  mode: file_transfer\n",
+        "  send_window: 256\n",
+        "  recv_window: 256\n",
+        "  mtu: 1400\n",
+        "  max_sessions: 128\n",
+    );
+    // Profile preset: mode-agnostic client_chain fragment wrapped per mode.
+    let profile = |name: &str,
+                       title: &str,
+                       description: &str,
+                       address: &str,
+                       body: &str,
+                       extra: &[(&str, Value)]| {
+        let mut preset = Map::new();
+        preset.insert("name".into(), name.into());
+        preset.insert("title".into(), title.into());
+        preset.insert("description".into(), description.into());
+        preset.insert("scope".into(), "profile".into());
+        preset.insert("modes".into(), serde_json::json!(["proxy", "vpn"]));
+        preset.insert("yaml".into(), format!("address: {address}\n{body}").into());
+        for (key, value) in extra {
+            preset.insert((*key).into(), value.clone());
+        }
+        preset.into()
+    };
+    let mut catalog: Vec<Value> = vec![
+        profile(
+            "vless_reality",
+            "VLESS + Reality",
+            "Reality-обёртка поверх VLESS: устойчивость к активному зондированию",
+            "server.example.com:443",
+            concat!(
+                "transport: tcp\n",
+                "protocol:\n",
+                "  type: reality\n",
+                "  public_key: \"{{PUBLIC_KEY}}\"\n",
+                "  short_id: \"0123456789abcdef\"\n",
+                "  sni_hostname: www.cloudflare.com\n",
+                "  protocol:\n",
+                "    type: vless\n",
+                "    user_id: \"{{USER_ID}}\"\n",
+            ),
+            &[
+                ("default", Value::Bool(true)),
+                ("hints", serde_json::json!(["preset_hint_no_browser_fingerprint"])),
+                ("placeholders", serde_json::json!(["PUBLIC_KEY", "USER_ID"])),
+            ],
+        ),
+        profile(
+            "trojan_tls",
+            "Trojan + TLS",
+            "Trojan внутри TLS: парольная аутентификация без заметных признаков",
+            "server.example.com:443",
+            concat!(
+                "transport: tcp\n",
+                "protocol:\n",
+                "  type: tls\n",
+                "  sni_hostname: server.example.com\n",
+                "  protocol:\n",
+                "    type: trojan\n",
+                "    password: \"{{PASSWORD}}\"\n",
+            ),
+            &[("placeholders", serde_json::json!(["PASSWORD"]))],
+        ),
+        profile(
+            "vmess_wss",
+            "VMess + WS + TLS",
+            "VMess внутри WebSocket внутри TLS (форма examples/socks_through_wss_vmess.yaml)",
+            "server.example.com:443",
+            concat!(
+                "transport: tcp\n",
+                "protocol:\n",
+                "  type: tls\n",
+                "  sni_hostname: server.example.com\n",
+                "  protocol:\n",
+                "    type: ws\n",
+                "    matching_path: /ws\n",
+                "    protocol:\n",
+                "      type: vmess\n",
+                "      cipher: aes-128-gcm\n",
+                "      user_id: \"{{USER_ID}}\"\n",
+            ),
+            &[("placeholders", serde_json::json!(["USER_ID"]))],
+        ),
+        profile(
+            "shadowsocks",
+            "Shadowsocks",
+            "Классический Shadowsocks (aes-128-gcm)",
+            "server.example.com:8388",
+            concat!(
+                "transport: tcp\n",
+                "protocol:\n",
+                "  type: shadowsocks\n",
+                "  cipher: aes-128-gcm\n",
+                "  password: \"{{PASSWORD}}\"\n",
+            ),
+            &[("placeholders", serde_json::json!(["PASSWORD"]))],
+        ),
+        profile(
+            "socks",
+            "SOCKS5",
+            "Проксирование через удалённый SOCKS5-сервер",
+            "server.example.com:1080",
+            concat!("transport: tcp\n", "protocol:\n  type: socks\n"),
+            &[],
+        ),
+        profile(
+            "anytls_kcp",
+            "AnyTLS + KCP (экспериментально)",
+            "AnyTLS поверх KCP-транспорта; транспорт помечен как экспериментальный",
+            "server.example.com:443",
+            concat!(
+                "transport: kcp\n",
+                "{kcp_settings}",
+                "protocol:\n",
+                "  type: anytls\n",
+                "  password: \"{{PASSWORD}}\"\n",
+            )
+            .replace("{kcp_settings}", kcp_settings)
+            .as_str(),
+            &[
+                ("stability", Value::String("experimental".into())),
+                ("placeholders", serde_json::json!(["PASSWORD"])),
+            ],
+        ),
+        profile(
+            "socks_kcp",
+            "SOCKS5 + KCP (экспериментально)",
+            "Удалённый SOCKS5-сервер через KCP-транспорт (форма examples/kcp.yaml)",
+            "server.example.com:19090",
+            concat!(
+                "transport: kcp\n",
+                "{kcp_settings}",
+                "protocol:\n",
+                "  type: socks\n",
+            )
+            .replace("{kcp_settings}", kcp_settings)
+            .as_str(),
+            &[("stability", Value::String("experimental".into()))],
+        ),
+    ];
+    // Service presets are complete proxy-mode listener entries.
+    let service = |name: &str, title: &str, description: &str, yaml: &str| {
+        let mut preset = Map::new();
+        preset.insert("name".into(), name.into());
+        preset.insert("title".into(), title.into());
+        preset.insert("description".into(), description.into());
+        preset.insert("scope".into(), "service".into());
+        preset.insert("modes".into(), serde_json::json!(["proxy"]));
+        preset.insert("yaml".into(), yaml.into());
+        preset.into()
+    };
+    catalog.push(service(
+        "local_socks",
+        "Локальный SOCKS",
+        "SOCKS5-слушатель на 127.0.0.1:1080 без внешнего сервера",
+        "- address: \"127.0.0.1:1080\"\n  protocol:\n    type: socks\n",
+    ));
+    catalog.push(service(
+        "local_mixed",
+        "Локальный Mixed (без аутентификации)",
+        "HTTP+SOCKS5 автоопределение на 127.0.0.1:7890; без пароля",
+        "- address: \"127.0.0.1:7890\"\n  protocol:\n    type: mixed\n",
+    ));
+    Value::Array(catalog)
+}
+
+/// Server-side counterparts for presets that need paired key material
+/// (ADR-0005). Placeholders: `{{PORT}}`, `{{PRIVATE_KEY}}` (server only),
+/// `{{USER_ID}}`, `{{PASSWORD}}`. Validated by substituting generated
+/// credentials in Rust tests.
+fn server_pair_templates() -> Value {
+    let vless_reality = concat!(
+        "# Paired server for the vless_reality preset (examples/reality_basic.yaml).\n",
+        "- address: \"0.0.0.0:{{PORT}}\"\n",
+        "  protocol:\n",
+        "    type: tls\n",
+        "    reality_targets:\n",
+        "      www.cloudflare.com:\n",
+        "        private_key: \"{{PRIVATE_KEY}}\"\n",
+        "        short_ids: [\"0123456789abcdef\", \"\"]\n",
+        "        dest: www.cloudflare.com:443\n",
+        "        protocol:\n",
+        "          type: vless\n",
+        "          user_id: \"{{USER_ID}}\"\n",
+        "          udp_enabled: true\n",
+    );
+    let anytls_kcp = concat!(
+        "# Paired server for the anytls_kcp preset (examples/kcp.yaml + anytls.yaml).\n",
+        "- address: \"0.0.0.0:{{PORT}}\"\n",
+        "  transport: kcp\n",
+        "  kcp_settings:\n",
+        "    mode: file_transfer\n",
+        "    send_window: 256\n",
+        "    recv_window: 256\n",
+        "    mtu: 1400\n",
+        "    max_sessions: 128\n",
+        "  protocol:\n",
+        "    type: anytls\n",
+        "    users:\n",
+        "      - name: user1\n",
+        "        password: \"{{PASSWORD}}\"\n",
+    );
+    serde_json::json!({
+        "vless_reality": vless_reality,
+        "anytls_kcp": anytls_kcp,
+    })
 }
 
 fn walk(value: &mut Value, key_hint: Option<&str>, marked: &mut Option<&mut Vec<String>>) {

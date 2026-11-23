@@ -255,6 +255,33 @@ pub extern "system" fn Java_com_shoesproxy_ShoesNative_validateConfig<'local>(
     }
 }
 
+/// Generate credentials with the library's own crypto (see ADR-0005).
+/// Returns the structured JSON result, or `{"error": "..."}` for an
+/// unsupported kind.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_shoesproxy_ShoesNative_generateCredentials<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    kind: JString<'local>,
+) -> JString<'local> {
+    let extracted = unowned
+        .with_env(|env| env.get_string(&kind).map(|value| value.to_string()))
+        .into_outcome();
+    let kind_str = match extracted {
+        Outcome::Ok(value) => value,
+        Outcome::Err(error) => {
+            error!("Failed to extract credential kind: {error}");
+            return JString::null();
+        }
+        Outcome::Panic(_) => return JString::null(),
+    };
+    let json = super::config_credentials::generate_credentials_json(&kind_str);
+    match unowned.with_env(|env| env.new_string(json)).into_outcome() {
+        Outcome::Ok(value) => value,
+        _ => JString::null(),
+    }
+}
+
 /// Start the shoes service.
 ///
 /// # Arguments

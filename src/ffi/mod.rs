@@ -39,8 +39,14 @@ mod config_validation;
 #[cfg(any(target_os = "android", target_os = "ios", feature = "ffi"))]
 mod config_schema;
 
+#[cfg(any(target_os = "android", target_os = "ios", feature = "ffi"))]
+mod config_credentials;
+
 #[cfg(all(test, feature = "ffi"))]
 mod config_schema_tests;
+
+#[cfg(all(test, feature = "ffi"))]
+mod config_credentials_tests;
 
 #[cfg(all(test, feature = "ffi"))]
 mod config_validation_tests;
