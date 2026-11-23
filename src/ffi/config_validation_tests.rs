@@ -280,3 +280,4 @@ fn diagnostic_count_is_bounded() {
     assert!(!report.valid);
     assert!(report.diagnostics.len() <= MAX_DIAGNOSTICS);
 }
+

@@ -1,4 +1,5 @@
 use super::config_schema::config_schema;
+use super::config_validation::{ValidationMode, validate_config};
 use serde_json::Value;
 
 const PASSWORD_SENTINEL: &str = "SUPER_SECRET_DEFAULT";
@@ -90,12 +91,92 @@ fn schema_carries_no_configuration_values() {
     }
     let schema = config_schema();
     let mut strings = Vec::new();
-    structural_strings(&schema, "", &mut strings);
+    // Presets and mode skeletons are intentional template data owned by the
+    // export (ADR-0005); the structure-only guarantee covers components.
+    structural_strings(&schema["components"], "", &mut strings);
     for text in &strings {
         assert!(
             text.parse::<std::net::IpAddr>().is_err(),
             "address value leaked into schema: {text}"
         );
         assert!(!text.contains("://"), "endpoint value leaked: {text}");
+    }
+}
+
+#[tokio::test]
+async fn presets_validate_natively_in_their_declared_mode() {
+    let schema = config_schema();
+    let presets = schema["presets"].as_array().expect("presets");
+    assert!(presets.len() >= 4, "preset catalog too small");
+    for preset in presets {
+        let mode = match preset["mode"].as_str().unwrap_or_default() {
+            "proxy" => ValidationMode::Proxy,
+            "vpn" => ValidationMode::Vpn,
+            other => panic!("unknown preset mode {other}"),
+        };
+        let report = validate_config(preset["yaml"].as_str().expect("yaml"), mode).await;
+        assert!(
+            report.valid,
+            "preset {} invalid: {:?}",
+            preset["name"],
+            report.diagnostics
+        );
+    }
+}
+
+#[test]
+fn presets_carry_no_secret_marked_values() {
+    let schema = config_schema();
+    for preset in schema["presets"].as_array().expect("presets") {
+        let yaml = preset["yaml"].as_str().expect("yaml");
+        let parsed: Vec<serde_yaml::Value> =
+            serde_yaml::from_str(yaml).expect("preset yaml must parse");
+        fn walk(value: &serde_yaml::Value, out: &mut Vec<String>) {
+            match value {
+                serde_yaml::Value::Mapping(map) => {
+                    for (key, item) in map {
+                        if let serde_yaml::Value::String(name) = key {
+                            out.push(name.clone());
+                        }
+                        walk(item, out);
+                    }
+                }
+                serde_yaml::Value::Sequence(items) => {
+                    for item in items {
+                        walk(item, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut keys = Vec::new();
+        walk(&serde_yaml::Value::Sequence(parsed), &mut keys);
+        for key in keys {
+            assert!(
+                !super::config_validation::is_sensitive_key(&key),
+                "preset {} carries secret key {key}",
+                preset["name"]
+            );
+        }
+    }
+}
+
+#[test]
+fn mode_skeletons_reference_existing_components() {
+    let schema = config_schema();
+    let components = schema["components"].as_object().expect("components");
+    let skeletons = schema["mode_skeletons"].as_object().expect("skeletons");
+    assert_eq!(skeletons.len(), 2, "exactly proxy and vpn");
+    for (mode, skeleton) in skeletons {
+        let fields = skeleton["fields"].as_array().expect("fields");
+        assert!(!fields.is_empty(), "{mode} skeleton has no fields");
+        for field in fields {
+            if let Some(component) = field["component"].as_str() {
+                assert!(
+                    components.contains_key(component),
+                    "{mode} references unknown component {component}"
+                );
+            }
+        }
     }
 }
