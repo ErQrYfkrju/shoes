@@ -281,3 +281,24 @@ fn diagnostic_count_is_bounded() {
     assert!(report.diagnostics.len() <= MAX_DIAGNOSTICS);
 }
 
+
+
+#[tokio::test]
+async fn probe_vpn_dns_group_reference() {
+    let profile = "address: server.example.com:443\ntransport: tcp\nprotocol:\n  type: socks\n  username: \"u\"\n  password: \"p\"";
+    let indented = profile.lines().map(|l| format!("        {l}")).collect::<Vec<_>>().join("\n");
+    let chain_profile = profile.lines().map(|l| format!("      {l}")).collect::<Vec<_>>().join("\n");
+    let yaml = format!(
+        concat!(
+            "- device_fd: -1\n",
+            "  dns_hijack: true\n",
+            "  dns:\n    servers: via-profile\n",
+            "  rules:\n    - masks: \"0.0.0.0/0\"\n      action: allow\n      client_chain:\n{indented}\n",
+            "- dns_group: via-profile\n",
+            "  dns_servers:\n  - url: \"tls://1.1.1.1\"\n    server_name: cloudflare-dns.com\n    client_chain:\n{chain}"
+        ),
+        indented = indented, chain = chain_profile
+    );
+    let report = validate_config(&yaml, ValidationMode::Vpn).await;
+    eprintln!("PROBE vpn_dns_ref: valid={} diags={:?}", report.valid, report.diagnostics);
+}

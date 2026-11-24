@@ -54,11 +54,19 @@ fn profile_skeleton() -> Value {
                 "visible_when": { "sibling": "transport", "equals": "kcp" },
                 "defaults": kcp_defaults(),
             },
-            { "key": "dns", "enum": dns_variant_ids(), "default": "via_server_1.1.1.1" },
+            {
+                "key": "dns",
+                "enum": dns_variant_ids(),
+                "default": "via_server_1.1.1.1",
+                // editor_only: выбор уровня формы; потребляется ассемблером,
+                // в client_chain профиля не попадает
+                "editor_only": true,
+            },
             {
                 "key": "dns_custom_url",
                 "kind": "text",
                 "visible_when": { "sibling": "dns", "equals": "custom" },
+                "editor_only": true,
             },
         ]
     })

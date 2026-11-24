@@ -448,3 +448,26 @@ async fn dns_group_template_validates_with_sample_profile() {
     // Sanity: the through-profile sample used real credentials without issue.
     let _ = credentials.user_id;
 }
+
+/// Task 4.4: the JVM test fixture (`app/src/test/resources/config_schema.json`)
+/// must be generated from this export, never hand-transcribed. The non-write
+/// mode fails when the committed fixture drifts; `make schema-fixture` reruns
+/// this test with SHOES_SCHEMA_FIXTURE=write to regenerate it.
+#[test]
+fn config_schema_fixture_matches_committed() {
+    let mut rendered = serde_json::to_string_pretty(&config_schema()).expect("pretty schema");
+    rendered.push('\n');
+    let fixture = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+        .join("../../test/resources/config_schema.json");
+    if std::env::var("SHOES_SCHEMA_FIXTURE").ok().as_deref() == Some("write") {
+        std::fs::write(&fixture, rendered).expect("write JVM fixture");
+        eprintln!("fixture regenerated: {}", fixture.display());
+        return;
+    }
+    let committed = std::fs::read_to_string(&fixture)
+        .expect("committed JVM fixture (app/src/test/resources/config_schema.json)");
+    assert_eq!(
+        committed, rendered,
+        "JVM fixture is stale: regenerate it with `make schema-fixture`"
+    );
+}
