@@ -158,6 +158,26 @@ fn profile_skeleton_references_existing_components() {
 }
 
 #[test]
+fn presets_carry_stable_title_keys() {
+    // title_key is the stable localization key resolved by Kotlin strings;
+    // the export title stays for backward compatibility.
+    let schema = config_schema();
+    let presets = schema["presets"].as_array().expect("presets");
+    assert_eq!(presets.len(), 9, "all nine presets carry title_key");
+    for preset in presets {
+        let name = preset["name"].as_str().expect("name");
+        assert_eq!(
+            preset["title_key"], format!("preset_{name}"),
+            "{name} must expose a stable preset_<name> title_key"
+        );
+        assert!(
+            !preset["title"].as_str().unwrap_or_default().is_empty(),
+            "{name} keeps its export title for backward compatibility"
+        );
+    }
+}
+
+#[test]
 fn preset_catalog_order_tags_and_scopes() {
     let schema = config_schema();
     let presets = schema["presets"].as_array().expect("presets");

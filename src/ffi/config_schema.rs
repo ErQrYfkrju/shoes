@@ -139,6 +139,8 @@ fn presets() -> Value {
         "  max_sessions: 128\n",
     );
     // Profile preset: mode-agnostic client_chain fragment wrapped per mode.
+    // `title_key` is the stable localization key resolved by Kotlin strings;
+    // `title` stays for backward compatibility (pre-title_key consumers).
     let profile = |name: &str,
                        title: &str,
                        description: &str,
@@ -147,6 +149,10 @@ fn presets() -> Value {
                        extra: &[(&str, Value)]| {
         let mut preset = Map::new();
         preset.insert("name".into(), name.into());
+        preset.insert(
+            "title_key".into(),
+            format!("preset_{name}").into(),
+        );
         preset.insert("title".into(), title.into());
         preset.insert("description".into(), description.into());
         preset.insert("scope".into(), "profile".into());
@@ -277,6 +283,10 @@ fn presets() -> Value {
     let service = |name: &str, title: &str, description: &str, yaml: &str| {
         let mut preset = Map::new();
         preset.insert("name".into(), name.into());
+        preset.insert(
+            "title_key".into(),
+            format!("preset_{name}").into(),
+        );
         preset.insert("title".into(), title.into());
         preset.insert("description".into(), description.into());
         preset.insert("scope".into(), "service".into());
