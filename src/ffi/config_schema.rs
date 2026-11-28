@@ -174,7 +174,7 @@ fn presets() -> Value {
                 "protocol:\n",
                 "  type: reality\n",
                 "  public_key: \"{{PUBLIC_KEY}}\"\n",
-                "  short_id: \"0123456789abcdef\"\n",
+                "  short_id: \"{{SHORT_ID}}\"\n",
                 "  sni_hostname: www.cloudflare.com\n",
                 "  protocol:\n",
                 "    type: vless\n",
@@ -183,7 +183,7 @@ fn presets() -> Value {
             &[
                 ("default", Value::Bool(true)),
                 ("hints", serde_json::json!(["preset_hint_no_browser_fingerprint"])),
-                ("placeholders", serde_json::json!(["PUBLIC_KEY", "USER_ID"])),
+                ("placeholders", serde_json::json!(["PUBLIC_KEY", "USER_ID", "SHORT_ID"])),
             ],
         ),
         profile(
@@ -311,8 +311,8 @@ fn presets() -> Value {
 
 /// Server-side counterparts for presets that need paired key material
 /// (ADR-0005). Placeholders: `{{PORT}}`, `{{PRIVATE_KEY}}` (server only),
-/// `{{USER_ID}}`, `{{PASSWORD}}`. Validated by substituting generated
-/// credentials in Rust tests.
+/// `{{USER_ID}}`, `{{PASSWORD}}`, `{{SHORT_ID}}`. Validated by substituting
+/// generated credentials in Rust tests.
 fn server_pair_templates() -> Value {
     let vless_reality = concat!(
         "# Paired server for the vless_reality preset (examples/reality_basic.yaml).\n",
@@ -322,7 +322,7 @@ fn server_pair_templates() -> Value {
         "    reality_targets:\n",
         "      www.cloudflare.com:\n",
         "        private_key: \"{{PRIVATE_KEY}}\"\n",
-        "        short_ids: [\"0123456789abcdef\", \"\"]\n",
+        "        short_ids: [\"{{SHORT_ID}}\", \"\"]\n",
         "        dest: www.cloudflare.com:443\n",
         "        protocol:\n",
         "          type: vless\n",

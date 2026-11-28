@@ -18,6 +18,12 @@ fn config_credentials_all_kinds_generate_structured_values() {
     let public_key = keypair["public_key"].as_str().expect("public_key");
     assert_eq!(private_key.len(), 43, "X25519 private key is 32 bytes base64url");
     assert_eq!(public_key.len(), 43, "X25519 public key is 32 bytes base64url");
+    let short_id = keypair["short_id"].as_str().expect("short_id");
+    assert_eq!(short_id.len(), 16, "reality short_id is 8 bytes hex");
+    assert!(
+        short_id.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "short_id must be hex: {short_id}"
+    );
 
     let user_id = generate_credentials("vless_user_id")
         .expect("uuid")
@@ -41,6 +47,29 @@ fn config_credentials_all_kinds_generate_structured_values() {
 }
 
 #[test]
+fn config_credentials_reality_short_id_differs_between_generations() {
+    let first = generate_credentials("reality_keypair").expect("first keypair");
+    let second = generate_credentials("reality_keypair").expect("second keypair");
+    let first_short = first["short_id"].as_str().expect("first short_id");
+    let second_short = second["short_id"].as_str().expect("second short_id");
+    assert_ne!(
+        first_short, second_short,
+        "short_id must be unique per profile, not a shared literal"
+    );
+}
+
+#[test]
+fn config_schema_export_contains_no_fixed_reality_short_id() {
+    // The documentation placeholder literal would give every generated profile
+    // the same cleartext fingerprint in the Reality handshake.
+    let raw = config_schema().to_string();
+    assert!(
+        !raw.contains("0123456789abcdef"),
+        "fixed short_id literal leaked into the schema export"
+    );
+}
+
+#[test]
 fn config_credentials_unknown_kind_returns_structured_error() {
     assert!(generate_credentials("teleport").is_err());
     let json = generate_credentials_json("teleport");
@@ -52,6 +81,9 @@ fn config_credentials_unknown_kind_returns_structured_error() {
 #[tokio::test]
 async fn config_credentials_vless_reality_pair_validates_natively() {
     let schema = config_schema();
+    // One generation supplies the whole keypair: private/public/short_id must
+    // stay a matched set across the client and server fragments.
+    let keypair = generate_credentials("reality_keypair").expect("keypair");
     let credentials = SampleCredentials {
         user_id: generate_credentials("vless_user_id")
             .expect("uuid")
@@ -60,15 +92,18 @@ async fn config_credentials_vless_reality_pair_validates_natively() {
             .expect("user_id")
             .to_string(),
         password: String::new(),
-        public_key: generate_credentials("reality_keypair")
-            .expect("keypair")
+        public_key: keypair
             .get("public_key")
             .and_then(Value::as_str)
             .expect("public_key")
             .to_string(),
+        short_id: keypair
+            .get("short_id")
+            .and_then(Value::as_str)
+            .expect("short_id")
+            .to_string(),
     };
-    let private_key = generate_credentials("reality_keypair")
-        .expect("keypair")
+    let private_key = keypair
         .get("private_key")
         .and_then(Value::as_str)
         .expect("private_key")
@@ -87,7 +122,8 @@ async fn config_credentials_vless_reality_pair_validates_natively() {
         .expect("server template")
         .replace("{{PORT}}", "443")
         .replace("{{PRIVATE_KEY}}", &private_key)
-        .replace("{{USER_ID}}", &credentials.user_id);
+        .replace("{{USER_ID}}", &credentials.user_id)
+        .replace("{{SHORT_ID}}", &credentials.short_id);
 
     // The pair validates as a set: client in both modes, server in proxy mode.
     for mode in [ValidationMode::Proxy, ValidationMode::Vpn] {
@@ -117,6 +153,15 @@ async fn config_credentials_vless_reality_pair_validates_natively() {
         "private key leaked into the client profile"
     );
     assert!(server_yaml.contains(&private_key), "server substitution failed");
+    // The generated short_id pairs the fragments: client sends it, server lists it.
+    assert!(
+        client_profile.contains(&credentials.short_id),
+        "client fragment lost the generated short_id"
+    );
+    assert!(
+        server_yaml.contains(&credentials.short_id),
+        "server fragment does not list the generated short_id"
+    );
 }
 
 #[tokio::test]

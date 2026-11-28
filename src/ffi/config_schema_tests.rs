@@ -11,6 +11,7 @@ pub(crate) struct SampleCredentials {
     pub user_id: String,
     pub password: String,
     pub public_key: String,
+    pub short_id: String,
 }
 
 pub(crate) fn sample_credentials() -> SampleCredentials {
@@ -32,10 +33,16 @@ pub(crate) fn sample_credentials() -> SampleCredentials {
         .and_then(Value::as_str)
         .expect("public_key")
         .to_string();
+    let short_id = keypair
+        .get("short_id")
+        .and_then(Value::as_str)
+        .expect("short_id")
+        .to_string();
     SampleCredentials {
         user_id: uuid,
         password,
         public_key,
+        short_id,
     }
 }
 
@@ -43,6 +50,7 @@ pub(crate) fn substitute_placeholders(yaml: &str, credentials: &SampleCredential
     yaml.replace("{{USER_ID}}", &credentials.user_id)
         .replace("{{PASSWORD}}", &credentials.password)
         .replace("{{PUBLIC_KEY}}", &credentials.public_key)
+        .replace("{{SHORT_ID}}", &credentials.short_id)
 }
 
 /// Embed a profile mapping under `client_chain:` with the given indentation.

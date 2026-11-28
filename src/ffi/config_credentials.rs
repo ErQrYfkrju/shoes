@@ -11,7 +11,14 @@ pub fn generate_credentials(kind: &str) -> Result<Value, String> {
         "reality_keypair" => {
             let (private_key, public_key) =
                 crate::reality::generate_keypair().map_err(|error| error.to_string())?;
-            Ok(json!({ "private_key": private_key, "public_key": public_key }))
+            // short_id travels in the cleartext part of the Reality handshake:
+            // per-profile randomness, never a shared documentation literal.
+            use aws_lc_rs::rand::{SecureRandom, SystemRandom};
+            let rng = SystemRandom::new();
+            let mut short_id = [0u8; 8];
+            rng.fill(&mut short_id).map_err(|error| error.to_string())?;
+            let short_id: String = short_id.iter().map(|byte| format!("{byte:02x}")).collect();
+            Ok(json!({ "private_key": private_key, "public_key": public_key, "short_id": short_id }))
         }
         "vless_user_id" => Ok(json!({ "user_id": crate::uuid_util::generate_uuid() })),
         // Mirrors the CLI `generate-shadowsocks-2022-password` flow for the
